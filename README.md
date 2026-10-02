@@ -28,6 +28,7 @@ que guarda `META_CAPI_TOKEN`, repassa à Meta. Alternativa sem Worker: `META_PIX
 Publicar o Worker pelo painel: Cloudflare → Workers & Pages → Create → Worker "mapa-da-carreira-relay" → Edit code → colar
 `worker.js` → Deploy. Em Settings → Variables and Secrets: `RELAY_SECRET` (secret), `META_CAPI_TOKEN` (secret),
 `META_PIXEL_ID` (texto). Conferir em `https://<worker>/health` → `meta_configured: true`.
+Em produção: `META_RELAY_URL=https://mapa-da-carreira-relay.robson-oc96.workers.dev`.
 
 **Notificações no topo**: só com atividade real dos últimos 3 dias (`/api/social-proof`). O primeiro nome aparece apenas
 se a pessoa marcou a autorização; senão, "Uma pessoa". Sem atividade, nada aparece. Nunca são inventadas.
