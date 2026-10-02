@@ -21,7 +21,13 @@ Para voltar a vender, defina `OFFER_MODE=paid`: o checkout Pix do Mercado Pago v
 | `DiagnosticInterest` | clicou em "Tenho interesse" | personalizado |
 | `Purchase` | pagamento aprovado (modo pago) | padrão |
 
-Nenhum evento leva nome, telefone ou respostas. Para a API de Conversões, configure `META_PIXEL_ID` e `META_CAPI_TOKEN`.
+Nenhum evento leva nome, telefone ou respostas. Para a API de Conversões, o token fica num **Worker da Cloudflare**
+(`workers/secrets-relay/worker.js`): o site assina cada evento com `META_RELAY_SECRET` e envia a `META_RELAY_URL`; o Worker,
+que guarda `META_CAPI_TOKEN`, repassa à Meta. Alternativa sem Worker: `META_PIXEL_ID` + `META_CAPI_TOKEN` no próprio site.
+
+Publicar o Worker pelo painel: Cloudflare → Workers & Pages → Create → Worker "mapa-da-carreira-relay" → Edit code → colar
+`worker.js` → Deploy. Em Settings → Variables and Secrets: `RELAY_SECRET` (secret), `META_CAPI_TOKEN` (secret),
+`META_PIXEL_ID` (texto). Conferir em `https://<worker>/health` → `meta_configured: true`.
 
 **Notificações no topo**: só com atividade real dos últimos 3 dias (`/api/social-proof`). O primeiro nome aparece apenas
 se a pessoa marcou a autorização; senão, "Uma pessoa". Sem atividade, nada aparece. Nunca são inventadas.

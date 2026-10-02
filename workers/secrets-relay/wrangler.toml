@@ -1,0 +1,8 @@
+# Opcional: publicar pela linha de comando (npx wrangler deploy) em vez de colar no painel.
+name = "mapa-da-carreira-relay"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+META_PIXEL_ID = "287406024051977"
+# Segredos (não ficam aqui): npx wrangler secret put RELAY_SECRET / META_CAPI_TOKEN

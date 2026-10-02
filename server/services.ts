@@ -2,7 +2,7 @@ import type { AppConfig } from './config';
 import { one, type Db } from './db';
 import { eventIds, META_EVENT_NAMES, type MetaEventKey } from '../shared/events';
 import type { MessageSender } from './whatsapp';
-import { newToken, sha256 } from './http';
+import { hmacHex, newToken, sha256 } from './http';
 import type { PaymentProvider } from './payments/types';
 import { applyProviderState, type ApplyResult } from './reconcile';
 
@@ -72,8 +72,9 @@ export async function sendMetaEvent(
   app: App,
   e: { key: MetaEventKey; eventId: string; attribution: Record<string, string> | null | undefined; valueCents?: number; at?: Date | string | null },
 ): Promise<void> {
-  const { pixelId, capiToken, testEventCode } = app.cfg.meta;
-  if (!pixelId || !capiToken) return;
+  const { pixelId, capiToken, testEventCode, relayUrl, relaySecret } = app.cfg.meta;
+  const viaRelay = !!(relayUrl && relaySecret);
+  if (!viaRelay && !(pixelId && capiToken)) return;
   const a = e.attribution ?? {};
   if (a.consent !== 'granted') return; // respeita a escolha de rastreamento
   const data: any = {
@@ -87,13 +88,26 @@ export async function sendMetaEvent(
   if (e.valueCents !== undefined) data.custom_data = { currency: 'BRL', value: e.valueCents / 100 };
   const body: any = { data: [data] };
   if (testEventCode) body.test_event_code = testEventCode;
+  const raw = JSON.stringify(body);
   try {
-    await app.fetchImpl(`https://graph.facebook.com/v21.0/${pixelId}/events?access_token=${encodeURIComponent(capiToken)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
-    });
+    if (viaRelay) {
+      // O token fica no Worker; aqui só assinamos o pedido.
+      const ts = String(Math.floor(Date.now() / 1000));
+      const res = await app.fetchImpl(`${relayUrl}/meta/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-mc-timestamp': ts, 'x-mc-signature': hmacHex('sha256', relaySecret!, `${ts}.${raw}`) },
+        body: raw,
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) console.error('Meta CAPI (Worker) recusou', res.status, (await res.text()).slice(0, 300));
+    } else {
+      await app.fetchImpl(`https://graph.facebook.com/v21.0/${pixelId}/events?access_token=${encodeURIComponent(capiToken!)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw,
+        signal: AbortSignal.timeout(5000),
+      });
+    }
   } catch (err) {
     console.error('Meta CAPI falhou', (err as Error).message);
   }

@@ -34,7 +34,7 @@ export type AppConfig = {
   };
   supportContact: string;
   seller: { name: string; document: string; address: string };
-  meta: { pixelId?: string; capiToken?: string; testEventCode?: string };
+  meta: { pixelId?: string; capiToken?: string; testEventCode?: string; relayUrl?: string; relaySecret?: string };
   admin: { password?: string };
   purchaseLinkTtlHours: number;
 };
@@ -90,7 +90,14 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
       document: e.SELLER_DOCUMENT ?? '[CNPJ/CPF]',
       address: e.SELLER_ADDRESS ?? '',
     },
-    meta: { pixelId: e.META_PIXEL_ID, capiToken: e.META_CAPI_TOKEN, testEventCode: e.META_TEST_EVENT_CODE },
+    meta: {
+      pixelId: e.META_PIXEL_ID,
+      capiToken: e.META_CAPI_TOKEN,
+      testEventCode: e.META_TEST_EVENT_CODE,
+      // Worker da Cloudflare que guarda o token (preferido ao token direto).
+      relayUrl: e.META_RELAY_URL?.replace(/\/+$/, ''),
+      relaySecret: e.META_RELAY_SECRET,
+    },
     admin: { password: e.ADMIN_PASSWORD },
     purchaseLinkTtlHours: Number(e.PURCHASE_LINK_TTL_HOURS ?? 168),
   };
