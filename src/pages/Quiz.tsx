@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CURRENT_AREA_MAX, DAILY_TIMES, MOMENTS, QUESTIONS, SCALE, type Answers, type QuizContext } from '../../shared/quiz';
-import { api, ApiFailure, storage } from '../api';
+import { api, ApiFailure, getMySession, storage } from '../api';
 import { getAttribution, getConsent, metaCookies, track } from '../analytics';
 
 const DRAFT_KEY = 'mc_draft';
@@ -25,6 +25,9 @@ export function Quiz() {
   const [error, setError] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  // Avanço automático: um instante para a pessoa ver a opção marcada; trava cliques repetidos.
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (advanceTimer.current) clearTimeout(advanceTimer.current); }, []);
 
   // Restaura a sessão do servidor (fonte da verdade) ou cria uma nova.
   useEffect(() => {
@@ -32,7 +35,8 @@ export function Quiz() {
       const startNew = params.get('novo') === '1';
       try {
         if (startNew) throw new ApiFailure(401, 'new', '');
-        const s = await api('GET', '/api/quiz/sessions/me');
+        const s = await getMySession();
+        if (!s) throw new ApiFailure(401, 'new', '');
         const draft = readDraft();
         const merged = { ...s.answers, ...(draft?.answers ?? {}) };
         setAnswers(merged);
@@ -73,6 +77,18 @@ export function Quiz() {
     setAnswers(next);
     if (Object.keys(answers).length === 0) track('GameStart');
     void save(next, context);
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    const from = step;
+    advanceTimer.current = setTimeout(() => {
+      advanceTimer.current = null;
+      setStep((cur) => (cur === from ? from + 1 : cur));
+    }, 280);
+  }
+
+  function goBack(to: number) {
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    advanceTimer.current = null;
+    setStep(to);
   }
 
   async function finish() {
@@ -135,7 +151,7 @@ export function Quiz() {
 
         {error && <div className="status error" role="alert">{error}</div>}
         <div className="row" style={{ marginTop: 18 }}>
-          <button className="btn secondary" onClick={() => setStep(QUESTIONS.length - 1)} disabled={calculating}>Voltar</button>
+          <button className="btn secondary" onClick={() => goBack(QUESTIONS.length - 1)} disabled={calculating}>Voltar</button>
           <button className="btn" disabled={!ok || calculating} onClick={finish}>
             {calculating ? <><span className="spinner" /> Calculando…</> : 'Ver minha prévia'}
           </button>
@@ -163,9 +179,9 @@ export function Quiz() {
         ))}
       </div>
       {error && <div className="status warn" role="alert">{error}</div>}
+      <p className="small muted" style={{ marginTop: 4 }}>Toque em uma opção para seguir.</p>
       <div className="row">
-        <button className="btn secondary" onClick={() => setStep(step - 1)} disabled={step === 0}>Voltar</button>
-        <button className="btn" disabled={!value} onClick={() => setStep(step + 1)}>Continuar</button>
+        <button className="btn secondary" onClick={() => goBack(step - 1)} disabled={step === 0}>Voltar</button>
       </div>
     </div>
   );

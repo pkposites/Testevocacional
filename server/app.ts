@@ -188,6 +188,11 @@ async function sessionView(app: App, s: any) {
 }
 
 route('GET', '/api/quiz/sessions/me', async (app, ctx) => {
+  // ?optional=1: "ainda não começou" é uma resposta normal (200 + null), não um erro no console.
+  if (ctx.url.searchParams.get('optional') === '1') {
+    const s = await getQuizSession(app, ctx);
+    return json(ctx, 200, s ? await sessionView(app, s) : null);
+  }
   const s = await requireQuizSession(app, ctx);
   return json(ctx, 200, await sessionView(app, s));
 });

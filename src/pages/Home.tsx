@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, brl, getConfig } from '../api';
+import { brl, getConfig, getMySession } from '../api';
 
 export function Home() {
   const nav = useNavigate();
@@ -9,8 +9,8 @@ export function Home() {
   const [resume, setResume] = useState<{ progress: number; hasResult: boolean } | null>(null);
   useEffect(() => {
     getConfig().then((c) => { setPrice(c.price_cents); setFree(c.offer_mode === 'free'); }).catch(() => undefined);
-    api('GET', '/api/quiz/sessions/me')
-      .then((s) => (s.progress > 0 ? setResume({ progress: s.progress, hasResult: !!s.result }) : null))
+    getMySession()
+      .then((s) => (s && s.progress > 0 ? setResume({ progress: s.progress, hasResult: !!s.result }) : null))
       .catch(() => undefined);
   }, []);
   return (

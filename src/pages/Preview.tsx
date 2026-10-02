@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { maskBrPhone, normalizeBrPhone } from '../../shared/phone';
-import { api, brl, getConfig, storage, type PublicConfig } from '../api';
+import { api, brl, getConfig, getMySession, storage, type PublicConfig } from '../api';
 import { getConsent, metaCookies, track } from '../analytics';
 
 type Summary = { topDimensions: { id: string; label: string }[]; explanation: string; broadProfile: boolean };
@@ -27,8 +27,8 @@ export function Preview() {
     getConfig().then(setCfg).catch(() => undefined);
     (async () => {
       try {
-        const s = await api('GET', '/api/quiz/sessions/me');
-        if (s.progress < 12) return nav('/teste', { replace: true });
+        const s = await getMySession();
+        if (!s || s.progress < 12) return nav('/teste', { replace: true });
         const r = s.result ?? (await api('POST', '/api/results'));
         setResultId(r.result_id);
         setSummary(r.summary);

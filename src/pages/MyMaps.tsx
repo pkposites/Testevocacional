@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, getMySession } from '../api';
 
 export function MyMaps() {
   const nav = useNavigate();
@@ -10,7 +10,7 @@ export function MyMaps() {
       .then((r) => setMaps(r.maps))
       .catch(async () => {
         // Sem sessão de acesso: talvez a compra tenha sido feita neste navegador.
-        const s = await api('GET', '/api/quiz/sessions/me').catch(() => null);
+        const s = await getMySession().catch(() => null);
         if (s?.purchased_result_id) nav(`/mapa/${s.purchased_result_id}`, { replace: true });
         else nav('/acesso', { replace: true });
       });

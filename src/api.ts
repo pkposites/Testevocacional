@@ -75,3 +75,8 @@ export const storage = {
     }
   },
 };
+
+/** Sessão do teste neste navegador, ou null se ainda não começou (sem gerar 401). */
+export function getMySession(): Promise<any | null> {
+  return api('GET', '/api/quiz/sessions/me?optional=1');
+}

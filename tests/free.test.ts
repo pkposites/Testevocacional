@@ -138,4 +138,16 @@ describe('modo gratuito', () => {
     expect(d.sources[0]).toMatchObject({ leads: 1, interested: 1, paid: 0 });
     expect(d.daily[0]).toMatchObject({ leads: 1, interested: 1, purchases: 0 });
   });
+
+  it('sessão opcional: sem teste começado responde null (sem 401); com teste, os dados', async () => {
+    const c = new Client(app);
+    const none = await c.req('GET', '/api/quiz/sessions/me?optional=1');
+    expect(none.status).toBe(200);
+    expect(none.body).toBeNull();
+    expect((await c.req('GET', '/api/quiz/sessions/me')).status).toBe(401);
+    await c.req('POST', '/api/quiz/sessions', { attribution: {} });
+    const some = await c.req('GET', '/api/quiz/sessions/me?optional=1');
+    expect(some.status).toBe(200);
+    expect(some.body.progress).toBe(0);
+  });
 });
