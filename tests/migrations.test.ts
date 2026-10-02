@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
 import { schemaSql } from '../server/db';
+import { REPAIR_JSONB_SQL } from '../server/db/repair';
 
 async function columns(pg: PGlite) {
   const r = await pg.query<{ t: string; c: string; n: string }>(
@@ -11,15 +12,15 @@ async function columns(pg: PGlite) {
 }
 
 describe('migrações da Netlify', () => {
-  it('001…005 chegam ao mesmo esquema de schema.sql', async () => {
+  it('001…004 chegam ao mesmo esquema de schema.sql', async () => {
     const migrated = new PGlite();
-    for (const m of ['001_init', '002_whatsapp', '003_free_mode', '004_indexes', '005_fix-jsonb']) await migrated.exec(readFileSync(`netlify/database/migrations/${m}/migration.sql`, 'utf8'));
+    for (const m of ['001_init', '002_whatsapp', '003_free_mode', '004_indexes']) await migrated.exec(readFileSync(`netlify/database/migrations/${m}/migration.sql`, 'utf8'));
     const fresh = new PGlite();
     await fresh.exec(schemaSql());
     expect(await columns(migrated)).toEqual(await columns(fresh));
   });
 
-  it('005 recupera jsonb gravado como string pelo driver', async () => {
+  it('correção única recupera jsonb gravado como string pelo driver', async () => {
     const pg = new PGlite();
     await pg.exec(schemaSql());
     const ans = JSON.stringify({ Q01: 3, Q02: 4 });
@@ -29,7 +30,7 @@ describe('migrações da Netlify', () => {
       JSON.stringify(JSON.stringify({ moment: 'change', dailyTime: 60 })),
       JSON.stringify([JSON.stringify({ utm_source: 'meta' }), JSON.stringify({ consent: 'granted' })]),
     ]);
-    await pg.exec(readFileSync('netlify/database/migrations/005_fix-jsonb/migration.sql', 'utf8'));
+    await pg.exec(REPAIR_JSONB_SQL);
     const r = (await pg.query<any>('select answers, context, attribution from quiz_sessions')).rows[0];
     expect(r.answers).toEqual({ Q01: 3, Q02: 4 });
     expect(r.context).toEqual({ moment: 'change', dailyTime: 60 });

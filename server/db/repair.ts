@@ -1,3 +1,10 @@
+// Correção única dos valores jsonb que o driver postgres.js gravou como string JSON
+// (dupla serialização). Roda pelo próprio app, uma vez por banco, e fica registrada.
+import type { Db } from './index';
+
+export const REPAIR_NAME = 'fix-jsonb-1';
+
+export const REPAIR_JSONB_SQL = String.raw`
 -- Corrige valores jsonb gravados como string JSON (dupla serialização do driver postgres.js).
 -- Tudo num único bloco, sem funções temporárias, para rodar em qualquer executor de migração.
 do $$
@@ -65,3 +72,15 @@ where jsonb_typeof(context) = 'object' and exists (select 1 from jsonb_object_ke
 update quiz_sessions
 set attribution = attribution - array(select k from jsonb_object_keys(attribution) k where k ~ '^[0-9]+$')
 where jsonb_typeof(attribution) = 'object' and exists (select 1 from jsonb_object_keys(attribution) k where k ~ '^[0-9]+$');
+`;
+
+export async function repairJsonbOnce(db: Db): Promise<boolean> {
+  await db.query(`create table if not exists app_repairs (name text primary key, applied_at timestamptz not null default now())`);
+  return db.tx(async (t) => {
+    // Trava a linha do registro: se duas instâncias subirem juntas, só uma corrige.
+    const done = await t.query(`insert into app_repairs (name) values ($1) on conflict (name) do nothing returning name`, [REPAIR_NAME]);
+    if (!done.length) return false;
+    await t.query(REPAIR_JSONB_SQL);
+    return true;
+  });
+}

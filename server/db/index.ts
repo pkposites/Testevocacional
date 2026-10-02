@@ -38,7 +38,7 @@ export async function createPostgresDb(url: string): Promise<Db> {
   // serializa de novo e grava uma string JSON em vez do objeto; aqui textos passam direto.
   const passJson = (x: unknown) => (typeof x === 'string' ? x : JSON.stringify(x));
   const sql = postgres(url, {
-    max, prepare: false, idle_timeout: 20, connect_timeout: 10,
+    max, prepare: false, idle_timeout: 20, connect_timeout: 10, onnotice: () => {},
     types: {
       json: { to: 114, from: [114], serialize: passJson, parse: (x: string) => JSON.parse(x) },
       jsonb: { to: 3802, from: [3802], serialize: passJson, parse: (x: string) => JSON.parse(x) },
