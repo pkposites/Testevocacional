@@ -51,6 +51,10 @@ O provedor `fake` é bloqueado em produção.
 
 ## Colocar no ar
 
+> Site de teste atual na Netlify: **mapa-da-carreira-teste** (ligado ao branch `claude/mapa-da-carreira-mvp`).
+> Variáveis mínimas do modo de teste: `APP_ENV`, `APP_SECRET`, `ADMIN_PASSWORD`, `PUBLIC_BASE_URL`, `USE_NETLIFY_DB=1`,
+> `OFFER_MODE=free`, `PAYMENT_PROVIDER`, `WHATSAPP_PROVIDER=none`, `META_PIXEL_ID`. Mudou variável? Faça um novo deploy.
+
 1. **Supabase**: crie o projeto e rode `DATABASE_URL=... npm run db:migrate`
    (ou aplique `supabase/migrations/20261002000000_init.sql`). Use a string do *Transaction pooler* (porta 6543).
 2. **Netlify**: conecte o repositório e cadastre as variáveis de `.env.example`. O build roda typecheck, build e checagem do bundle.

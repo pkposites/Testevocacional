@@ -16,6 +16,11 @@ export function getApp(): Promise<App> {
       const { getConnectionString } = await import('@netlify/database');
       url = getConnectionString();
     }
+    // Hospedado (Netlify/Lambda) sem banco configurado: falhar alto em vez de gravar numa memória que se perde.
+    const hosted = !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.SITE_ID || process.env.NETLIFY);
+    if (!url && hosted && !process.env.PGLITE_DIR) {
+      throw new Error('Banco não configurado: defina USE_NETLIFY_DB=1 ou DATABASE_URL nas variáveis do site');
+    }
     const db = url ? await createPostgresDb(url) : await createPgliteDb(process.env.PGLITE_DIR || undefined);
     return { cfg, db, provider: createProvider(cfg), messages: createMessageSender(cfg), fetchImpl: fetch };
   })().catch((e) => {
