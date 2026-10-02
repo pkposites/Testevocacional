@@ -1,7 +1,7 @@
 // Monta a aplicação a partir das variáveis de ambiente (reaproveitada entre invocações quentes).
 import { loadConfig } from './config';
 import { createPgliteDb, createPostgresDb } from './db';
-import { repairJsonbOnce } from './db/repair';
+import { repairJsonbInBackground } from './db/repair';
 import { createMessageSender } from './whatsapp';
 import { createProvider } from './payments';
 import type { App } from './services';
@@ -23,11 +23,7 @@ export function getApp(): Promise<App> {
       throw new Error('Banco não configurado: defina USE_NETLIFY_DB=1 ou DATABASE_URL nas variáveis do site');
     }
     const db = url ? await createPostgresDb(url) : await createPgliteDb(process.env.PGLITE_DIR || undefined);
-    if (url) {
-      await repairJsonbOnce(db)
-        .then((ran) => ran && console.log('Correção de jsonb aplicada'))
-        .catch((e) => console.error('Correção de jsonb falhou', (e as Error).message));
-    }
+    if (url) await repairJsonbInBackground(db);
     return { cfg, db, provider: createProvider(cfg), messages: createMessageSender(cfg), fetchImpl: fetch };
   })().catch((e) => {
     appPromise = undefined;

@@ -75,12 +75,30 @@ where jsonb_typeof(attribution) = 'object' and exists (select 1 from jsonb_objec
 `;
 
 export async function repairJsonbOnce(db: Db): Promise<boolean> {
-  await db.query(`create table if not exists app_repairs (name text primary key, applied_at timestamptz not null default now())`);
   return db.tx(async (t) => {
-    // Trava a linha do registro: se duas instâncias subirem juntas, só uma corrige.
+    // Nunca segura o site: se algo estiver travado no banco, desiste rápido e tenta numa próxima inicialização.
+    await t.query(`set local lock_timeout = '1s'`);
+    await t.query(`set local statement_timeout = '4s'`);
+    await t.query(`create table if not exists app_repairs (name text primary key, applied_at timestamptz not null default now())`);
+    const [lock] = await t.query<{ ok: boolean }>(`select pg_try_advisory_xact_lock(hashtext($1)) as ok`, [REPAIR_NAME]);
+    if (!lock?.ok) return false; // outra instância está corrigindo agora
     const done = await t.query(`insert into app_repairs (name) values ($1) on conflict (name) do nothing returning name`, [REPAIR_NAME]);
     if (!done.length) return false;
     await t.query(REPAIR_JSONB_SQL);
     return true;
   });
+}
+
+let attempted = false;
+
+/** Uma tentativa por instância, com teto de tempo; falhar não afeta o atendimento. */
+export async function repairJsonbInBackground(db: Db): Promise<void> {
+  if (attempted) return;
+  attempted = true;
+  const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('tempo esgotado')), 5_000));
+  try {
+    if (await Promise.race([repairJsonbOnce(db), timeout])) console.log('Correção de jsonb aplicada');
+  } catch (e) {
+    console.error('Correção de jsonb adiada', (e as Error).message);
+  }
 }

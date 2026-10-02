@@ -808,6 +808,27 @@ route('GET', '/api/admin/me', async (app, ctx) => {
   return json(ctx, 200, { ok: true });
 });
 
+/** Diagnóstico do banco: correção única, dados ainda quebrados e sessões presas. */
+route('GET', '/api/admin/db-health', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const safe = async (sql: string) => {
+    try {
+      return await app.db.query(sql);
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  };
+  const [repair, broken, stuck] = await Promise.all([
+    safe(`select name, applied_at from app_repairs`),
+    safe(`select count(*)::int as n from quiz_sessions where jsonb_typeof(answers) <> 'object' or jsonb_typeof(context) <> 'object' or jsonb_typeof(attribution) <> 'object'`),
+    safe(`select pid, state, now() - xact_start as idade, wait_event_type, left(query, 120) as consulta
+          from pg_stat_activity
+          where datname = current_database() and pid <> pg_backend_pid() and xact_start is not null and now() - xact_start > interval '30 seconds'
+          order by xact_start limit 10`),
+  ]);
+  return json(ctx, 200, { repair, broken, stuck });
+});
+
 route('POST', '/api/admin/logout', async (app, ctx) => {
   ctx.setCookies.push(cookie(ADM_COOKIE, '', { maxAgeSec: 0, secure: secure(app), path: '/api/admin' }));
   return json(ctx, 200, { ok: true });
