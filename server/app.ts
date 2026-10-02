@@ -796,8 +796,8 @@ function requireAdmin(app: App, ctx: Ctx) {
 route('POST', '/api/admin/login', async (app, ctx) => {
   await limit(app, ctx, 'admin-login', 5, 900);
   const body = await readJson(ctx);
-  const pw = String(body.password ?? '');
-  if (!app.cfg.admin.password || !safeEqual(sha256(pw), sha256(app.cfg.admin.password))) throw new ApiError(401, 'invalid_login', 'Senha incorreta.');
+  const pw = String(body.password ?? '').trim();
+  if (!app.cfg.admin.password || !safeEqual(sha256(pw), sha256(app.cfg.admin.password.trim()))) throw new ApiError(401, 'invalid_login', 'Senha incorreta.');
   const exp = Date.now() + 8 * 3600_000;
   ctx.setCookies.push(cookie(ADM_COOKIE, adminToken(app, exp), { maxAgeSec: 8 * 3600, secure: secure(app), path: '/api/admin' }));
   return json(ctx, 200, { ok: true });
