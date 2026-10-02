@@ -2,7 +2,7 @@
 // (dupla serialização). Roda pelo próprio app, uma vez por banco, e fica registrada.
 import type { Db } from './index';
 
-export const REPAIR_NAME = 'fix-jsonb-1';
+export const REPAIR_NAME = 'fix-jsonb-2';
 
 export const REPAIR_JSONB_SQL = String.raw`
 -- Corrige valores jsonb gravados como string JSON (dupla serialização do driver postgres.js).
@@ -20,6 +20,10 @@ begin
     select table_name t, column_name col from information_schema.columns
     where table_schema = current_schema() and data_type = 'jsonb'
   loop
+    -- Valores enormes (a string crescia a cada resposta) não são lidos: viram vazio direto.
+    execute format(
+      'update %I set %I = %L::jsonb where pg_column_size(%I) > 65536 and %L <> ''snapshot''',
+      c.t, c.col, case when c.col = 'ranked_career_ids' then '[]' else '{}' end, c.col, c.col);
     for r in execute format(
       'select ctid as rid, %I as v from %I where jsonb_typeof(%I) = ''string'' or (%L = ''attribution'' and jsonb_typeof(%I) = ''array'')',
       c.col, c.t, c.col, c.col, c.col)
@@ -77,8 +81,8 @@ where jsonb_typeof(attribution) = 'object' and exists (select 1 from jsonb_objec
 export async function repairJsonbOnce(db: Db): Promise<boolean> {
   return db.tx(async (t) => {
     // Nunca segura o site: se algo estiver travado no banco, desiste rápido e tenta numa próxima inicialização.
-    await t.query(`set local lock_timeout = '1s'`);
-    await t.query(`set local statement_timeout = '4s'`);
+    await t.query(`set local lock_timeout = '2s'`);
+    await t.query(`set local statement_timeout = '6s'`);
     await t.query(`create table if not exists app_repairs (name text primary key, applied_at timestamptz not null default now())`);
     const [lock] = await t.query<{ ok: boolean }>(`select pg_try_advisory_xact_lock(hashtext($1)) as ok`, [REPAIR_NAME]);
     if (!lock?.ok) return false; // outra instância está corrigindo agora
@@ -95,7 +99,7 @@ let attempted = false;
 export async function repairJsonbInBackground(db: Db): Promise<void> {
   if (attempted) return;
   attempted = true;
-  const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('tempo esgotado')), 5_000));
+  const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('tempo esgotado')), 7_000));
   try {
     if (await Promise.race([repairJsonbOnce(db), timeout])) console.log('Correção de jsonb aplicada');
   } catch (e) {

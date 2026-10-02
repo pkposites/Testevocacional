@@ -61,10 +61,53 @@ const secure = (app: App) => app.cfg.publicBaseUrl.startsWith('https://');
 
 // ---------- sessões ----------
 
+// Sessões gravadas antes da correção do driver podem ter jsonb gigante (string que crescia a cada resposta).
+// Nunca carregamos esses valores: o banco troca por {} (pg_column_size não descompacta o valor).
+const SAFE_JSON = (col: string) =>
+  `case when pg_column_size(${col}) > 16384 or jsonb_typeof(${col}) <> 'object' then '{}'::jsonb else ${col} end as ${col}, ` +
+  `(pg_column_size(${col}) > 16384 or jsonb_typeof(${col}) <> 'object') as ${col}_bad`;
+
+function cleanAnswers(v: unknown): Answers {
+  const out: Answers = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const q of QUESTIONS) {
+    const x = (v as any)[q.id];
+    if (Number.isInteger(x) && x >= 1 && x <= 5) out[q.id] = x;
+  }
+  return out;
+}
+
+function cleanContext(v: unknown): QuizContext {
+  try {
+    return validateContext(v);
+  } catch {
+    return {};
+  }
+}
+
 async function getQuizSession(app: App, ctx: Ctx): Promise<any | undefined> {
   const tok = ctx.cookies[S_COOKIE];
   if (!tok) return undefined;
-  return one(app.db, 'select * from quiz_sessions where session_token_hash = $1', [sha256(tok)]);
+  const s = await one(
+    app.db,
+    `select id, session_token_hash, quiz_version, answer_revision, created_at, updated_at, ${SAFE_JSON('answers')}, ${SAFE_JSON('context')}, ${SAFE_JSON('attribution')}
+     from quiz_sessions where session_token_hash = $1`,
+    [sha256(tok)],
+  );
+  if (!s) return undefined;
+  const answers = cleanAnswers(s.answers);
+  const context = cleanContext(s.context);
+  const attribution = s.attribution_bad ? {} : s.attribution;
+  const dirty = s.answers_bad || s.context_bad || s.attribution_bad
+    || JSON.stringify(answers) !== JSON.stringify(s.answers) || JSON.stringify(context) !== JSON.stringify(s.context);
+  if (dirty) {
+    // Conserta a linha na hora (só esta sessão), sem depender da correção em lote.
+    await app.db.query(`update quiz_sessions set answers = $2::jsonb, context = $3::jsonb, attribution = $4::jsonb, updated_at = now() where id = $1`, [
+      s.id, JSON.stringify(answers), JSON.stringify(context), JSON.stringify(attribution),
+    ]);
+  }
+  return { id: s.id, session_token_hash: s.session_token_hash, quiz_version: s.quiz_version, answer_revision: s.answer_revision,
+    created_at: s.created_at, updated_at: s.updated_at, answers, context, attribution };
 }
 
 async function requireQuizSession(app: App, ctx: Ctx) {
