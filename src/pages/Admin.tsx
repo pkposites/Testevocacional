@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatBrPhone } from '../../shared/phone';
 import { api, ApiFailure, brl } from '../api';
+import { Dashboard } from './Dashboard';
 
 const dt = (v?: string | null) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
 
@@ -16,6 +17,7 @@ export function Admin() {
   const [note, setNote] = useState('');
   const [forceManual, setForceManual] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<'painel' | 'pedidos'>('painel');
   const [share, setShare] = useState<{ link: string; wa: string } | null>(null);
 
   async function load() {
@@ -71,7 +73,12 @@ export function Admin() {
 
   return (
     <div className="wrap admin-wrap">
-      <h1>Admin · pedidos</h1>
+      <h1>Admin</h1>
+      <div className="admin-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'painel'} onClick={() => setTab('painel')}>Painel</button>
+        <button role="tab" aria-selected={tab === 'pedidos'} onClick={() => setTab('pedidos')}>Pedidos</button>
+      </div>
+      {tab === 'painel' ? <Dashboard /> : <>
       {msg && <div className="status info">{msg}</div>}
       {share && (
         <div className="card soft">
@@ -146,6 +153,7 @@ export function Admin() {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

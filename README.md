@@ -54,6 +54,16 @@ A documentação do Mercado Pago estava inacessível no ambiente de desenvolvime
 - O Pix é criado sem e-mail do pagador (só nome e telefone). Se o Mercado Pago recusar, defina
   `MP_PAYER_EMAIL_TEMPLATE` (ex.: `pix+{ref}@seu-dominio.com.br`). Nunca use o e-mail da própria conta recebedora.
 
+## Painel de análise (admin `/admin` → Painel)
+
+Período (hoje, ontem, 7 ou 30 dias, ou datas livres) no fuso de Brasília. Mostra:
+- **Funil**: visitas → começaram → terminaram as 12 perguntas → prévia → clique em desbloquear → Pix → pagos, com a maior queda destacada.
+- **Onde desistem**: % de quem começou que chegou a cada pergunta, com a pergunta de maior saída.
+- **Por dia**: visitas, inícios e conclusões (gráfico ou tabela), com compras e receita no tooltip.
+- **Por anúncio**: agrupado pela UTM `utm_content` (nome do anúncio) e `utm_term` (conjunto).
+- **Pagamento, uso do mapa, perfil e resultados**: Pix pagos/expirados, tempo até pagar, plano iniciado, momentos de carreira, caminhos sugeridos e quantas compras cada um gera.
+- **ROAS e custo por compra**: informe o investimento do período para comparar com a meta (1,8 / R$ 8,05) e ver a conversão necessária.
+
 ## Operação (admin `/admin`)
 
 Buscar por WhatsApp, código `MC-…`, ID do pedido ou do pagamento. Também dá para consultar o provedor, gerar o link de acesso

@@ -5,6 +5,7 @@ import { one } from './db';
 import { ApiError, clientIp, cookie, errorResponse, hmacHex, json, newToken, normalizePhone, parseCookies, readJson, requestId, safeEqual, sha256, type Ctx } from './http';
 import { fakeStore } from './payments/fake';
 import { ProviderNetworkError, type ProviderPaymentState } from './payments/types';
+import { buildAnalytics, parseRange } from './analytics';
 import { applyProviderState } from './reconcile';
 import { computeResult, type ResultSnapshot } from './scoring';
 import { normalizeBrPhone } from '../shared/phone';
@@ -701,6 +702,12 @@ route('GET', '/api/admin/orders', async (app, ctx) => {
     [q],
   );
   return json(ctx, 200, { orders: rows });
+});
+
+route('GET', '/api/admin/analytics', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const range = parseRange(ctx.url.searchParams.get('from'), ctx.url.searchParams.get('to'));
+  return json(ctx, 200, await buildAnalytics(app.db, range));
 });
 
 route('GET', '/api/admin/alerts', async (app, ctx) => {
