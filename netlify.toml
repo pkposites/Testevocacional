@@ -1,0 +1,19 @@
+[build]
+  command = "npm run build && npm run check:bundle"
+  publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["server/db/schema.sql"]
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
