@@ -39,8 +39,8 @@ export function Admin() {
 
   // Checagem leve de login: abre o painel sem esperar pedidos e alertas.
   useEffect(() => {
-    api('GET', '/api/admin/me')
-      .then(() => setAuthed(true))
+    api('GET', '/api/admin/me?optional=1')
+      .then((r) => setAuthed(!!r.ok))
       .catch((e) => (e instanceof ApiFailure && e.status === 401 ? setAuthed(false) : setMsg((e as Error).message)));
   }, []);
   useEffect(() => {

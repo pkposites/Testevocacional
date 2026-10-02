@@ -702,6 +702,7 @@ async function listMaps(app: App, phone: string) {
 
 route('GET', '/api/access/me', async (app, ctx) => {
   const phone = await getAccessPhone(app, ctx);
+  if (!phone && ctx.url.searchParams.get('optional') === '1') return json(ctx, 200, { maps: null });
   if (!phone) throw new ApiError(401, 'no_access', 'Acesso não encontrado.');
   return json(ctx, 200, { maps: await listMaps(app, phone) });
 });
@@ -846,12 +847,23 @@ route('POST', '/api/admin/login', async (app, ctx) => {
   const body = await readJson(ctx);
   const pw = String(body.password ?? '').trim();
   if (!app.cfg.admin.password || !safeEqual(sha256(pw), sha256(app.cfg.admin.password.trim()))) throw new ApiError(401, 'invalid_login', 'Senha incorreta.');
+  // Login certo zera o contador: só tentativas erradas acumulam para o bloqueio.
+  await app.db.query('delete from rate_limits where key = $1', [`admin-login:${clientIp(ctx.req)}`]);
   const exp = Date.now() + 8 * 3600_000;
   ctx.setCookies.push(cookie(ADM_COOKIE, adminToken(app, exp), { maxAgeSec: 8 * 3600, secure: secure(app), path: '/api/admin' }));
   return json(ctx, 200, { ok: true });
 });
 
 route('GET', '/api/admin/me', async (app, ctx) => {
+  // ?optional=1: "não logado" é resposta normal (200 + ok:false), sem erro no console.
+  if (ctx.url.searchParams.get('optional') === '1') {
+    try {
+      requireAdmin(app, ctx);
+    } catch {
+      return json(ctx, 200, { ok: false });
+    }
+    return json(ctx, 200, { ok: true });
+  }
   requireAdmin(app, ctx);
   return json(ctx, 200, { ok: true });
 });

@@ -150,4 +150,20 @@ describe('modo gratuito', () => {
     expect(some.status).toBe(200);
     expect(some.body.progress).toBe(0);
   });
+
+  it('admin: login certo não conta para o bloqueio; 5 erros seguidos bloqueiam', async () => {
+    const adm = new Client(app);
+    for (let i = 0; i < 8; i++) expect((await adm.req('POST', '/api/admin/login', { password: 'adm' })).status).toBe(200);
+    for (let i = 0; i < 5; i++) expect((await adm.req('POST', '/api/admin/login', { password: 'x' })).status).toBe(401);
+    expect((await adm.req('POST', '/api/admin/login', { password: 'x' })).status).toBe(429);
+  });
+
+  it('checagens opcionais de acesso e admin respondem 200 sem login', async () => {
+    const c = new Client(app);
+    expect(await c.req('GET', '/api/access/me?optional=1')).toEqual({ status: 200, body: { maps: null } });
+    expect((await c.req('GET', '/api/access/me')).status).toBe(401);
+    expect(await c.req('GET', '/api/admin/me?optional=1')).toEqual({ status: 200, body: { ok: false } });
+    await c.req('POST', '/api/admin/login', { password: 'adm' });
+    expect((await c.req('GET', '/api/admin/me?optional=1')).body).toEqual({ ok: true });
+  });
 });

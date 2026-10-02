@@ -6,14 +6,15 @@ export function MyMaps() {
   const nav = useNavigate();
   const [maps, setMaps] = useState<{ result_id: string; public_ref: string; paid_at: string }[] | null>(null);
   useEffect(() => {
-    api('GET', '/api/access/me')
-      .then((r) => setMaps(r.maps))
-      .catch(async () => {
-        // Sem sessão de acesso: talvez a compra tenha sido feita neste navegador.
-        const s = await getMySession().catch(() => null);
-        if (s?.purchased_result_id) nav(`/mapa/${s.purchased_result_id}`, { replace: true });
-        else nav('/acesso', { replace: true });
-      });
+    const noAccess = async () => {
+      // Sem sessão de acesso: talvez a compra/cadastro tenha sido feita neste navegador.
+      const s = await getMySession().catch(() => null);
+      if (s?.purchased_result_id) nav(`/mapa/${s.purchased_result_id}`, { replace: true });
+      else nav('/acesso', { replace: true });
+    };
+    api('GET', '/api/access/me?optional=1')
+      .then((r) => (r.maps ? setMaps(r.maps) : noAccess()))
+      .catch(noAccess);
   }, [nav]);
   if (!maps) return <div className="wrap"><div className="spinner dark" aria-label="Carregando" /></div>;
   return (
