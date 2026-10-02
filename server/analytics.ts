@@ -22,15 +22,14 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
   const boundsEnd = `(($2::date + 1)::timestamp at time zone '${TZ}')`;
   const p = [range.from, range.to];
 
-  const eventRows = await db.query(
+  const eventRowsP = db.query(
     `select name, count(*)::int as total, count(distinct coalesce(session_id::text, order_id::text, event_id))::int as uniq
      from events where ts >= ${bounds} and ts < ${boundsEnd} group by name`,
     p,
   );
-  const ev = (name: string, k: 'total' | 'uniq' = 'uniq') => n(eventRows.find((r) => r.name === name)?.[k]);
 
   const qCols = QUESTIONS.map((q) => `count(*) filter (where jsonb_exists(s.answers, '${q.id}'))::int as "${q.id}"`).join(', ');
-  const quiz = (await db.query(
+  const quizP = db.query(
     `select count(*)::int as sessions,
        count(*) filter (where s.answers <> '{}'::jsonb)::int as started,
        ${qCols},
@@ -38,16 +37,16 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
        count(*) filter (where exists (select 1 from results r where r.session_id = s.id))::int as with_result
      from quiz_sessions s where s.created_at >= ${bounds} and s.created_at < ${boundsEnd}`,
     p,
-  ))[0];
+  ).then((r) => r[0]);
 
-  const minutesToResult = (await db.query(
+  const minutesToResultP = db.query(
     `select percentile_cont(0.5) within group (order by extract(epoch from (r.first_at - s.created_at)) / 60) as med
      from quiz_sessions s join (select session_id, min(created_at) as first_at from results group by session_id) r on r.session_id = s.id
      where s.created_at >= ${bounds} and s.created_at < ${boundsEnd}`,
     p,
-  ))[0]?.med;
+  ).then((r) => r[0]?.med);
 
-  const daily = await db.query(
+  const dailyP = db.query(
     `with days as (select to_char(d, 'YYYY-MM-DD') as day from generate_series($1::date, $2::date, interval '1 day') d),
      e as (select to_char((ts at time zone '${TZ}')::date, 'YYYY-MM-DD') as day, name,
              count(distinct coalesce(session_id::text, order_id::text, event_id))::int as c
@@ -67,7 +66,7 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
     p,
   );
 
-  const orders = (await db.query(
+  const ordersP = db.query(
     `select count(*)::int as created,
        count(*) filter (where exists (select 1 from payments pp where pp.order_id = o.id))::int as pix_generated,
        count(*) filter (where o.status in ('paid','refunded','disputed') and o.provider <> 'free')::int as paid,
@@ -80,16 +79,16 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
          filter (where o.paid_at is not null) as med_minutes_to_pay
      from orders o where o.created_at >= ${bounds} and o.created_at < ${boundsEnd}`,
     p,
-  ))[0];
+  ).then((r) => r[0]);
 
-  const revenue = (await db.query(
+  const revenueP = db.query(
     `select coalesce(sum(amount_cents) filter (where status = 'paid'), 0)::int as net_cents,
        coalesce(sum(amount_cents), 0)::int as gross_cents, count(*)::int as purchases
      from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0`,
     p,
-  ))[0];
+  ).then((r) => r[0]);
 
-  const sources = await db.query(
+  const sourcesP = db.query(
     `with s as (
        select id, answers,
          coalesce(nullif(attribution->>'utm_content', ''), nullif(attribution->>'utm_source', ''), '(sem UTM / direto)') as source,
@@ -115,31 +114,31 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
     p,
   );
 
-  const profile = {
-    moments: await db.query(
+  const profileP = Promise.all([
+    /* moments */ db.query(
       `select coalesce(context->>'moment', '(sem)') as key, count(*)::int as c from results
        where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc`, p),
-    dailyTime: await db.query(
+    /* dailyTime */ db.query(
       `select coalesce(context->>'dailyTime', '(sem)') as key, count(*)::int as c from results
        where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc`, p),
-    preferences: await db.query(
+    /* preferences */ db.query(
       `select (snapshot->'summary'->'topDimensions'->0->>'label') || ' + ' || (snapshot->'summary'->'topDimensions'->1->>'label') as key,
          count(*)::int as c,
          count(*) filter (where (snapshot->>'broadProfile')::boolean)::int as broad
        from results where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc limit 10`, p),
-    topCareer: await db.query(
+    /* topCareer */ db.query(
       `select r.snapshot->'cards'->0->>'name' as key, count(*)::int as c,
          count(o.id) filter (where o.status in ('paid','refunded','disputed') and o.provider <> 'free')::int as paid,
          count(o.id) filter (where o.provider = 'free')::int as leads,
          count(o.id) filter (where o.diagnostic_interest_at is not null)::int as interested
        from results r left join orders o on o.result_id = r.id
        where r.created_at >= ${bounds} and r.created_at < ${boundsEnd} group by 1 order by c desc`, p),
-    broad: n((await db.query(
+    db.query(
       `select count(*) filter (where (snapshot->>'broadProfile')::boolean)::int as c from results
-       where created_at >= ${bounds} and created_at < ${boundsEnd}`, p))[0]?.c),
-  };
+       where created_at >= ${bounds} and created_at < ${boundsEnd}`, p).then((r) => n(r[0]?.c)),
+  ]).then(([moments, dailyTime, preferences, topCareer, broad]) => ({ moments, dailyTime, preferences, topCareer, broad }));
 
-  const delivery = (await db.query(
+  const deliveryP = db.query(
     `select count(*)::int as entitlements,
        count(*) filter (where first_access_at is not null)::int as accessed,
        count(*) filter (where exists (select 1 from progress g where g.entitlement_id = e.id and g.checked))::int as plan_started,
@@ -147,19 +146,22 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
        coalesce(avg((select count(*) from progress g where g.entitlement_id = e.id and g.checked)), 0)::float as avg_days
      from entitlements e where e.created_at >= ${bounds} and e.created_at < ${boundsEnd}`,
     p,
-  ))[0];
-  const decisions = await db.query(
+  ).then((r) => r[0]);
+  const decisionsP = db.query(
     `select decision as key, count(*)::int as c from reflections f join entitlements e on e.id = f.entitlement_id
      where e.created_at >= ${bounds} and e.created_at < ${boundsEnd} and decision is not null group by 1 order by c desc`,
     p,
   );
 
-  const consent = await db.query(
+  const consentP = db.query(
     `select consent_state as key, count(*)::int as c from events
      where name = 'PageView' and ts >= ${bounds} and ts < ${boundsEnd} group by 1`,
     p,
   );
 
+  // Todas as consultas rodam em paralelo (cada ida ao banco custa uma viagem de rede).
+  const [eventRows, quiz, minutesToResult, daily, orders, revenue, sources, profile, delivery, decisions, consent] = await Promise.all([eventRowsP, quizP, minutesToResultP, dailyP, ordersP, revenueP, sourcesP, profileP, deliveryP, decisionsP, consentP]);
+  const ev = (name: string, k: 'total' | 'uniq' = 'uniq') => n(eventRows.find((r) => r.name === name)?.[k]);
   const started = n(quiz.started);
   return {
     range,

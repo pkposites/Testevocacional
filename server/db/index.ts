@@ -32,7 +32,9 @@ export function schemaSql(): string {
 export async function createPostgresDb(url: string): Promise<Db> {
   const { default: postgres } = await import('postgres');
   // prepare:false é exigido pelo pooler em modo transação do Supabase (porta 6543).
-  const sql = postgres(url, { max: 1, prepare: false, idle_timeout: 20, connect_timeout: 10 });
+  // Algumas conexões permitem que o painel faça suas consultas em paralelo.
+  const max = Math.min(10, Math.max(1, Number(process.env.DB_POOL_MAX ?? 4)));
+  const sql = postgres(url, { max, prepare: false, idle_timeout: 20, connect_timeout: 10 });
   const wrap = (s: any): Db => ({
     query: async (text, params = []) => (await s.unsafe(text, params as any[])) as any,
     tx: (fn) => (s.begin ? s.begin((t: any) => fn(wrap(t))) : fn(wrap(s))) as any,

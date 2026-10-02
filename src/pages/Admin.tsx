@@ -21,17 +21,31 @@ export function Admin() {
   const [tab, setTab] = useState<'painel' | 'leads' | 'pedidos'>('painel');
   const [share, setShare] = useState<{ link: string; wa: string } | null>(null);
 
+  // Pedidos e alertas só carregam na aba Pedidos (em paralelo).
   async function load() {
     try {
-      setAlerts(await api('GET', '/api/admin/alerts'));
-      setOrders((await api('GET', `/api/admin/orders?q=${encodeURIComponent(q)}`)).orders);
+      const [a, o] = await Promise.all([
+        api('GET', '/api/admin/alerts'),
+        api('GET', `/api/admin/orders?q=${encodeURIComponent(q)}`),
+      ]);
+      setAlerts(a);
+      setOrders(o.orders);
       setAuthed(true);
     } catch (e) {
       if (e instanceof ApiFailure && e.status === 401) setAuthed(false);
       else setMsg((e as Error).message);
     }
   }
-  useEffect(() => void load(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Checagem leve de login: abre o painel sem esperar pedidos e alertas.
+  useEffect(() => {
+    api('GET', '/api/admin/me')
+      .then(() => setAuthed(true))
+      .catch((e) => (e instanceof ApiFailure && e.status === 401 ? setAuthed(false) : setMsg((e as Error).message)));
+  }, []);
+  useEffect(() => {
+    if (authed && tab === 'pedidos') void load();
+  }, [authed, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function open(id: string, keepShare = false) {
     if (!keepShare) setShare(null);
@@ -60,7 +74,7 @@ export function Admin() {
         <h1>Admin</h1>
         <form className="stack" onSubmit={async (e) => {
           e.preventDefault();
-          try { await api('POST', '/api/admin/login', { password: pw }); await load(); } catch (err) { setMsg((err as Error).message); }
+          try { await api('POST', '/api/admin/login', { password: pw }); setMsg(null); setAuthed(true); } catch (err) { setMsg((err as Error).message); }
         }}>
           <label htmlFor="pw">Senha</label>
           <input id="pw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />

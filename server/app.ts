@@ -803,6 +803,11 @@ route('POST', '/api/admin/login', async (app, ctx) => {
   return json(ctx, 200, { ok: true });
 });
 
+route('GET', '/api/admin/me', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  return json(ctx, 200, { ok: true });
+});
+
 route('POST', '/api/admin/logout', async (app, ctx) => {
   ctx.setCookies.push(cookie(ADM_COOKIE, '', { maxAgeSec: 0, secure: secure(app), path: '/api/admin' }));
   return json(ctx, 200, { ok: true });
@@ -826,7 +831,11 @@ route('GET', '/api/admin/orders', async (app, ctx) => {
 route('GET', '/api/admin/analytics', async (app, ctx) => {
   requireAdmin(app, ctx);
   const range = parseRange(ctx.url.searchParams.get('from'), ctx.url.searchParams.get('to'));
-  return json(ctx, 200, await buildAnalytics(app.db, range, app.cfg.offerMode));
+  const t0 = Date.now();
+  const data = await buildAnalytics(app.db, range, app.cfg.offerMode);
+  const res = json(ctx, 200, data);
+  res.headers.set('server-timing', `db;dur=${Date.now() - t0}`);
+  return res;
 });
 
 route('GET', '/api/admin/leads', async (app, ctx) => {

@@ -13,7 +13,7 @@ async function columns(pg: PGlite) {
 describe('migrações da Netlify', () => {
   it('001 + 002 + 003 chegam ao mesmo esquema de schema.sql', async () => {
     const migrated = new PGlite();
-    for (const m of ['001_init', '002_whatsapp', '003_free_mode']) await migrated.exec(readFileSync(`netlify/database/migrations/${m}/migration.sql`, 'utf8'));
+    for (const m of ['001_init', '002_whatsapp', '003_free_mode', '004_indexes']) await migrated.exec(readFileSync(`netlify/database/migrations/${m}/migration.sql`, 'utf8'));
     const fresh = new PGlite();
     await fresh.exec(schemaSql());
     expect(await columns(migrated)).toEqual(await columns(fresh));
