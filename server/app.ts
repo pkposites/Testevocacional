@@ -9,7 +9,8 @@ import { buildAnalytics, parseRange } from './analytics';
 import { applyProviderState } from './reconcile';
 import { computeResult, type ResultSnapshot } from './scoring';
 import { normalizeBrPhone } from '../shared/phone';
-import { accessLink, afterApply, drainOutbox, rateLimit, reconcilePayment, type App } from './services';
+import { eventIds } from '../shared/events';
+import { accessLink, afterApply, drainOutbox, rateLimit, reconcilePayment, sendMetaEvent, type App } from './services';
 import { accessText } from './whatsapp';
 
 const S_COOKIE = 'mc_s';
@@ -100,6 +101,24 @@ async function recordEvent(app: App, e: { eventId: string; name: string; session
   );
 }
 
+/** Dados técnicos para a API de Conversões (sem dados pessoais) + escolha de cookies. */
+function trackingContext(ctx: Ctx, body: any): Record<string, string> {
+  const out: Record<string, string> = {
+    ip: clientIp(ctx.req),
+    ua: (ctx.req.headers.get('user-agent') ?? '').slice(0, 300),
+  };
+  if (typeof body?.fbp === 'string' && body.fbp) out.fbp = body.fbp.slice(0, 100);
+  if (typeof body?.fbc === 'string' && body.fbc) out.fbc = body.fbc.slice(0, 200);
+  if (body?.consent === 'granted' || body?.consent === 'denied') out.consent = body.consent;
+  return out;
+}
+
+function firstName(v: unknown): string {
+  const t = String(v ?? '').trim().split(/\s+/)[0] ?? '';
+  const clean = t.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ'-]/g, '').slice(0, 20);
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase() : '';
+}
+
 function cleanAttribution(v: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (!v || typeof v !== 'object') return out;
@@ -126,6 +145,7 @@ route('GET', '/api/config', async (app, ctx) =>
     quiz_version: QUIZ_VERSION,
     dev_tools: app.cfg.paymentProvider === 'fake' && app.cfg.env !== 'production',
     whatsapp_auto: app.messages.enabled,
+    offer_mode: app.cfg.offerMode,
   }),
 );
 
@@ -138,7 +158,7 @@ route('POST', '/api/quiz/sessions', async (app, ctx) => {
   const row = await one(
     app.db,
     `insert into quiz_sessions (session_token_hash, quiz_version, attribution) values ($1,$2,$3::jsonb) returning id, quiz_version`,
-    [sha256(tok), QUIZ_VERSION, JSON.stringify(cleanAttribution(body.attribution))],
+    [sha256(tok), QUIZ_VERSION, JSON.stringify({ ...cleanAttribution(body.attribution), ...trackingContext(ctx, body) })],
   );
   ctx.setCookies.push(cookie(S_COOKIE, tok, { maxAgeSec: 90 * 86400, secure: secure(app) }));
   return json(ctx, 201, { session_id: row!.id, quiz_version: row!.quiz_version });
@@ -222,7 +242,12 @@ route('PUT', '/api/quiz/sessions/me', async (app, ctx) => {
 });
 
 route('POST', '/api/results', async (app, ctx) => {
-  const s = await requireQuizSession(app, ctx);
+  let s = await requireQuizSession(app, ctx);
+  const body = await readJson(ctx);
+  const tracking = trackingContext(ctx, body);
+  if (tracking.consent || tracking.fbp || tracking.fbc) {
+    s = await one(app.db, `update quiz_sessions set attribution = attribution || $2::jsonb where id = $1 returning *`, [s.id, JSON.stringify(tracking)]);
+  }
   if (!isCompleteAnswers(s.answers)) throw new ApiError(400, 'incomplete', 'Responda as 12 perguntas.');
   if (!isCompleteContext(s.context)) throw new ApiError(400, 'incomplete_context', 'Informe seu momento de carreira e o tempo disponível.');
   let row = await one(app.db, 'select id, snapshot from results where session_id = $1 and answer_revision = $2', [s.id, s.answer_revision]);
@@ -237,11 +262,18 @@ route('POST', '/api/results', async (app, ctx) => {
       [s.id, s.answer_revision, JSON.stringify(s.answers), JSON.stringify(s.context), JSON.stringify(r.scores), JSON.stringify(r.rankedCareerIds),
         r.snapshot.resultVersion, r.snapshot.contentVersion, JSON.stringify(r.snapshot)],
     );
-    await recordEvent(app, { eventId: `gamecomplete_${s.id}_${s.answer_revision}`, name: 'GameComplete', sessionId: s.id, attribution: s.attribution });
+    const eventId = eventIds.gameComplete(s.id, s.answer_revision);
+    await recordEvent(app, { eventId, name: 'GameComplete', sessionId: s.id, attribution: s.attribution, consent: s.attribution?.consent });
+    await sendMetaEvent(app, { key: 'GameComplete', eventId, attribution: s.attribution });
   }
   const snap = row!.snapshot as ResultSnapshot;
-  // Somente a prévia: nada de ranking, caminhos ou planos antes da compra.
-  return json(ctx, 200, { result_id: row!.id, summary: snap.summary, broad_profile: snap.broadProfile });
+  // Somente a prévia: nada de ranking, caminhos ou planos antes da liberação.
+  return json(ctx, 200, {
+    result_id: row!.id,
+    summary: snap.summary,
+    broad_profile: snap.broadProfile,
+    event_id: eventIds.gameComplete(s.id, s.answer_revision),
+  });
 });
 
 // ---------- pedidos e checkout ----------
@@ -342,6 +374,7 @@ async function ensureCheckout(app: App, order: any, forceNew = false): Promise<v
 }
 
 route('POST', '/api/orders', async (app, ctx) => {
+  if (app.cfg.offerMode === 'free') throw new ApiError(409, 'free_mode', 'O mapa está gratuito: use o cadastro com nome e WhatsApp.');
   const s = await requireQuizSession(app, ctx);
   await limit(app, ctx, 'orders', 20, 600);
   const body = await readJson(ctx);
@@ -423,6 +456,90 @@ route('POST', '/api/orders/:id/retry', async (app, ctx) => {
   if (order.status === 'paid') return json(ctx, 200, await orderView(app, order));
   await ensureCheckout(app, order, true);
   return json(ctx, 200, await orderView(app, await one(app.db, 'select * from orders where id = $1', [order.id])));
+});
+
+// ---------- modo gratuito: nome + WhatsApp liberam o mapa ----------
+
+route('POST', '/api/leads', async (app, ctx) => {
+  if (app.cfg.offerMode !== 'free') throw new ApiError(409, 'paid_mode', 'O mapa completo está disponível pelo pagamento.');
+  const s = await requireQuizSession(app, ctx);
+  await limit(app, ctx, 'leads', 20, 600);
+  const body = await readJson(ctx);
+  const resultId = String(body.result_id ?? '');
+  if (!UUID_RE.test(resultId)) throw new ApiError(400, 'invalid_result', 'Resultado inválido.');
+  const result = await one(app.db, 'select id, session_id, answer_revision from results where id = $1', [resultId]);
+  if (!result || result.session_id !== s.id) throw new ApiError(404, 'result_not_found', 'Resultado não encontrado nesta sessão.');
+  if (result.answer_revision !== s.answer_revision) throw new ApiError(409, 'stale_result', 'Suas respostas mudaram. Veja a prévia atualizada.');
+  const name = String(body.buyer_name ?? '').trim().slice(0, 60);
+  if (name.length < 2) throw new ApiError(400, 'invalid_name', 'Informe seu primeiro nome.');
+  const phone = normalizePhone(body.buyer_phone);
+  if (body.contact_consent !== true) throw new ApiError(400, 'consent_required', 'Para liberar o mapa, aceite receber seu resultado pelo WhatsApp.');
+  const publicNameOk = body.public_name_ok === true;
+
+  const attribution = { ...s.attribution, ...trackingContext(ctx, body) };
+  let created = false;
+  const order = await app.db.tx(async (t) => {
+    const existing = await one(t, `select * from orders where result_id = $1 order by created_at limit 1 for update`, [resultId]);
+    if (existing) {
+      return one(t, `update orders set buyer_name = $2, buyer_phone = $3, public_name_ok = $4, contact_consent = true, updated_at = now() where id = $1 returning *`,
+        [existing.id, name, phone, publicNameOk]);
+    }
+    created = true;
+    const o = await one(
+      t,
+      `insert into orders (public_ref, result_id, session_id, provider, amount_cents, currency, buyer_name, buyer_phone, marketing_opt_in,
+         contact_consent, public_name_ok, status, paid_at, attribution)
+       values ($1,$2,$3,'free',0,'BRL',$4,$5,$6,true,$7,'paid',now(),$8::jsonb) returning *`,
+      [publicRef(), resultId, s.id, name, phone, !!body.marketing_opt_in, publicNameOk, JSON.stringify(attribution)],
+    );
+    await t.query(`insert into entitlements (order_id, result_id, buyer_phone, state) values ($1,$2,$3,'active') on conflict (order_id) do nothing`, [o!.id, resultId, phone]);
+    await t.query(`insert into events (event_id, session_id, order_id, name, attribution, consent_state) values ($1,$2,$3,'Lead',$4::jsonb,$5) on conflict (event_id) do nothing`,
+      [eventIds.lead(o!.id), s.id, o!.id, JSON.stringify(cleanAttribution(attribution)), attribution.consent ?? 'unknown']);
+    if (app.messages.enabled) await t.query(`insert into message_outbox (order_id, kind, to_phone) values ($1,'free',$2)`, [o!.id, phone]);
+    return o;
+  });
+  // Abre a sessão de acesso deste aparelho para o número informado.
+  if ((await getAccessPhone(app, ctx)) !== phone) await startAccessSession(app, ctx, phone);
+  if (created) {
+    await sendMetaEvent(app, { key: 'Lead', eventId: eventIds.lead(order!.id), attribution });
+    await drainOutbox(app, order!.id);
+  }
+  return json(ctx, 200, { order_id: order!.id, public_ref: order!.public_ref, result_id: resultId, event_id: eventIds.lead(order!.id) });
+});
+
+route('POST', '/api/interest', async (app, ctx) => {
+  const body = await readJson(ctx);
+  const ent = await authorizeResult(app, ctx, String(body.result_id ?? ''));
+  const order = await one(
+    app.db,
+    `update orders set diagnostic_interest_at = coalesce(diagnostic_interest_at, now()), updated_at = now() where id = $1 returning *`,
+    [ent.order_id],
+  );
+  const eventId = eventIds.interest(order!.id);
+  const ins = await one(app.db,
+    `insert into events (event_id, session_id, order_id, name, attribution, consent_state) values ($1,$2,$3,'DiagnosticInterest',$4::jsonb,$5)
+     on conflict (event_id) do nothing returning id`,
+    [eventId, order!.session_id, order!.id, JSON.stringify(cleanAttribution(order!.attribution)), order!.attribution?.consent ?? 'unknown']);
+  if (ins) await sendMetaEvent(app, { key: 'DiagnosticInterest', eventId, attribution: order!.attribution });
+  return json(ctx, 200, { ok: true, event_id: eventId, interested_at: order!.diagnostic_interest_at });
+});
+
+/** Notificações de prova social com dados REAIS: primeiro nome só de quem autorizou. */
+route('GET', '/api/social-proof', async (app, ctx) => {
+  await limit(app, ctx, 'social', 60, 600);
+  const rows = await app.db.query(
+    `select o.buyer_name, o.public_name_ok, r.snapshot->'cards'->0->>'name' as career,
+       extract(epoch from (now() - o.created_at)) / 60 as minutes
+     from orders o join results r on r.id = o.result_id
+     where o.status in ('paid','refunded','disputed') and o.created_at > now() - interval '72 hours'
+     order by o.created_at desc limit 8`,
+  );
+  const today = await one<{ n: number }>(app.db,
+    `select count(*)::int as n from results where created_at >= (now() at time zone 'America/Sao_Paulo')::date::timestamp at time zone 'America/Sao_Paulo'`);
+  return new Response(JSON.stringify({
+    items: rows.map((r) => ({ name: r.public_name_ok ? firstName(r.buyer_name) || null : null, career: r.career, minutes_ago: Math.max(0, Math.round(Number(r.minutes))) })),
+    results_today: today?.n ?? 0,
+  }), { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60' } });
 });
 
 // ---------- webhooks ----------
@@ -580,6 +697,8 @@ route('GET', '/api/results/:id/full', async (app, ctx) => {
     public_ref: ent.public_ref,
     buyer_first_name: String(ent.buyer_name).split(' ')[0],
     selected_career_id: ent.selected_career_id,
+    offer_mode: app.cfg.offerMode,
+    diagnostic_interest: !!(await one(app.db, 'select diagnostic_interest_at from orders where id = $1', [ent.order_id]))?.diagnostic_interest_at,
     result_version: res!.result_version,
     content_version: res!.content_version,
     map: res!.snapshot,
@@ -707,7 +826,22 @@ route('GET', '/api/admin/orders', async (app, ctx) => {
 route('GET', '/api/admin/analytics', async (app, ctx) => {
   requireAdmin(app, ctx);
   const range = parseRange(ctx.url.searchParams.get('from'), ctx.url.searchParams.get('to'));
-  return json(ctx, 200, await buildAnalytics(app.db, range));
+  return json(ctx, 200, await buildAnalytics(app.db, range, app.cfg.offerMode));
+});
+
+route('GET', '/api/admin/leads', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const onlyInterest = ctx.url.searchParams.get('interest') === '1';
+  const rows = await app.db.query(
+    `select o.id, o.public_ref, o.buyer_name, o.buyer_phone, o.created_at, o.diagnostic_interest_at, o.public_name_ok, o.marketing_opt_in,
+       r.snapshot->'cards'->0->>'name' as career, r.context->>'moment' as moment, r.context->>'dailyTime' as daily_time,
+       o.attribution->>'utm_content' as utm_content, o.attribution->>'utm_term' as utm_term,
+       (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done
+     from orders o join results r on r.id = o.result_id
+     where o.provider = 'free' ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
+     order by coalesce(o.diagnostic_interest_at, o.created_at) desc limit 1000`,
+  );
+  return json(ctx, 200, { leads: rows });
 });
 
 route('GET', '/api/admin/alerts', async (app, ctx) => {

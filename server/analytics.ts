@@ -16,7 +16,7 @@ export function parseRange(from: string | null, to: string | null): Range {
 
 const n = (v: unknown) => Number(v ?? 0);
 
-export async function buildAnalytics(db: Db, range: Range) {
+export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid' = 'paid') {
   // [$1, $2): meia-noite local do primeiro dia até a meia-noite seguinte ao último.
   const bounds = `($1::date::timestamp at time zone '${TZ}')`;
   const boundsEnd = `(($2::date + 1)::timestamp at time zone '${TZ}')`;
@@ -53,13 +53,15 @@ export async function buildAnalytics(db: Db, range: Range) {
              count(distinct coalesce(session_id::text, order_id::text, event_id))::int as c
            from events where ts >= ${bounds} and ts < ${boundsEnd} group by 1, 2),
      o as (select to_char((paid_at at time zone '${TZ}')::date, 'YYYY-MM-DD') as day, sum(amount_cents)::int as revenue
-           from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') group by 1)
+           from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0 group by 1)
      select d.day,
        coalesce((select c from e where e.day = d.day and name = 'PageView'), 0) as visits,
        coalesce((select c from e where e.day = d.day and name = 'GameStart'), 0) as started,
        coalesce((select c from e where e.day = d.day and name = 'GameComplete'), 0) as completed,
        coalesce((select c from e where e.day = d.day and name = 'InitiateCheckout'), 0) as checkouts,
        coalesce((select c from e where e.day = d.day and name = 'Purchase'), 0) as purchases,
+       coalesce((select c from e where e.day = d.day and name = 'Lead'), 0) as leads,
+       coalesce((select c from e where e.day = d.day and name = 'DiagnosticInterest'), 0) as interested,
        coalesce(o.revenue, 0) as revenue_cents
      from days d left join o on o.day = d.day order by d.day`,
     p,
@@ -68,7 +70,10 @@ export async function buildAnalytics(db: Db, range: Range) {
   const orders = (await db.query(
     `select count(*)::int as created,
        count(*) filter (where exists (select 1 from payments pp where pp.order_id = o.id))::int as pix_generated,
-       count(*) filter (where o.status in ('paid','refunded','disputed'))::int as paid,
+       count(*) filter (where o.status in ('paid','refunded','disputed') and o.provider <> 'free')::int as paid,
+       count(*) filter (where o.provider = 'free')::int as leads,
+       count(*) filter (where o.provider = 'free' and o.diagnostic_interest_at is not null)::int as interested,
+       count(*) filter (where o.provider = 'free' and o.public_name_ok)::int as public_name_ok,
        count(*) filter (where o.status in ('expired','cancelled'))::int as expired,
        count(*) filter (where o.status in ('refunded','disputed'))::int as refunded,
        percentile_cont(0.5) within group (order by extract(epoch from (o.paid_at - o.created_at)) / 60)
@@ -80,7 +85,7 @@ export async function buildAnalytics(db: Db, range: Range) {
   const revenue = (await db.query(
     `select coalesce(sum(amount_cents) filter (where status = 'paid'), 0)::int as net_cents,
        coalesce(sum(amount_cents), 0)::int as gross_cents, count(*)::int as purchases
-     from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed')`,
+     from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0`,
     p,
   ))[0];
 
@@ -91,8 +96,10 @@ export async function buildAnalytics(db: Db, range: Range) {
          coalesce(attribution->>'utm_term', '') as adset
        from quiz_sessions where created_at >= ${bounds} and created_at < ${boundsEnd}),
      r as (select distinct session_id from results),
-     o as (select session_id, count(*)::int as orders,
-             count(*) filter (where status in ('paid','refunded','disputed'))::int as paid,
+     o as (select session_id, count(*) filter (where provider <> 'free')::int as orders,
+             count(*) filter (where status in ('paid','refunded','disputed') and provider <> 'free')::int as paid,
+             count(*) filter (where provider = 'free')::int as leads,
+             count(*) filter (where provider = 'free' and diagnostic_interest_at is not null)::int as interested,
              coalesce(sum(amount_cents) filter (where status = 'paid'), 0)::int as revenue
            from orders group by session_id)
      select s.source, s.adset, count(*)::int as sessions,
@@ -100,6 +107,8 @@ export async function buildAnalytics(db: Db, range: Range) {
        count(r.session_id)::int as completed,
        coalesce(sum(o.orders), 0)::int as orders,
        coalesce(sum(o.paid), 0)::int as paid,
+       coalesce(sum(o.leads), 0)::int as leads,
+       coalesce(sum(o.interested), 0)::int as interested,
        coalesce(sum(o.revenue), 0)::int as revenue_cents
      from s left join r on r.session_id = s.id left join o on o.session_id = s.id
      group by 1, 2 order by sessions desc limit 30`,
@@ -120,7 +129,9 @@ export async function buildAnalytics(db: Db, range: Range) {
        from results where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc limit 10`, p),
     topCareer: await db.query(
       `select r.snapshot->'cards'->0->>'name' as key, count(*)::int as c,
-         count(o.id) filter (where o.status in ('paid','refunded','disputed'))::int as paid
+         count(o.id) filter (where o.status in ('paid','refunded','disputed') and o.provider <> 'free')::int as paid,
+         count(o.id) filter (where o.provider = 'free')::int as leads,
+         count(o.id) filter (where o.diagnostic_interest_at is not null)::int as interested
        from results r left join orders o on o.result_id = r.id
        where r.created_at >= ${bounds} and r.created_at < ${boundsEnd} group by 1 order by c desc`, p),
     broad: n((await db.query(
@@ -152,15 +163,24 @@ export async function buildAnalytics(db: Db, range: Range) {
   const started = n(quiz.started);
   return {
     range,
+    mode,
     funnel: [
       { key: 'visits', label: 'Visitas na página inicial', value: ev('PageView', 'total') },
       { key: 'started', label: 'Começaram o teste', value: started },
       { key: 'completed', label: 'Terminaram as 12 perguntas', value: n(quiz.Q12) },
       { key: 'result', label: 'Viram a prévia', value: n(quiz.with_result) },
-      { key: 'checkout_click', label: 'Clicaram em desbloquear', value: ev('CheckoutClick') },
-      { key: 'pix', label: 'Geraram o Pix', value: n(orders.pix_generated) },
-      { key: 'paid', label: 'Pagaram', value: n(orders.paid) },
+      ...(mode === 'free'
+        ? [
+            { key: 'leads', label: 'Deixaram nome e WhatsApp', value: n(orders.leads) },
+            { key: 'interested', label: 'Têm interesse no diagnóstico', value: n(orders.interested) },
+          ]
+        : [
+            { key: 'checkout_click', label: 'Clicaram em desbloquear', value: ev('CheckoutClick') },
+            { key: 'pix', label: 'Geraram o Pix', value: n(orders.pix_generated) },
+            { key: 'paid', label: 'Pagaram', value: n(orders.paid) },
+          ]),
     ],
+    leads: { total: n(orders.leads), interested: n(orders.interested), publicNameOk: n(orders.public_name_ok) },
     questions: [
       ...QUESTIONS.map((q, i) => ({ key: q.id, label: `P${i + 1}`, text: q.text, value: n(quiz[q.id]) })),
       { key: 'context', label: 'Contexto', text: 'Momento de carreira e tempo por dia', value: n(quiz.context_done) },
@@ -170,6 +190,7 @@ export async function buildAnalytics(db: Db, range: Range) {
     daily: daily.map((d) => ({
       day: d.day, visits: n(d.visits), started: n(d.started), completed: n(d.completed),
       checkouts: n(d.checkouts), purchases: n(d.purchases), revenueCents: n(d.revenue_cents),
+      leads: n(d.leads), interested: n(d.interested),
     })),
     orders: {
       created: n(orders.created), pixGenerated: n(orders.pix_generated), paid: n(orders.paid), expired: n(orders.expired),
@@ -178,7 +199,7 @@ export async function buildAnalytics(db: Db, range: Range) {
     revenue: { grossCents: n(revenue.gross_cents), netCents: n(revenue.net_cents), purchases: n(revenue.purchases) },
     sources: sources.map((s) => ({
       source: s.source, adset: s.adset, sessions: n(s.sessions), started: n(s.started), completed: n(s.completed),
-      orders: n(s.orders), paid: n(s.paid), revenueCents: n(s.revenue_cents),
+      orders: n(s.orders), paid: n(s.paid), leads: n(s.leads), interested: n(s.interested), revenueCents: n(s.revenue_cents),
     })),
     profile,
     delivery: { ...delivery, avg_days: Number(delivery.avg_days ?? 0), decisions },

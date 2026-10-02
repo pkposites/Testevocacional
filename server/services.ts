@@ -1,5 +1,6 @@
 import type { AppConfig } from './config';
 import { one, type Db } from './db';
+import { eventIds, META_EVENT_NAMES, type MetaEventKey } from '../shared/events';
 import type { MessageSender } from './whatsapp';
 import { newToken, sha256 } from './http';
 import type { PaymentProvider } from './payments/types';
@@ -55,7 +56,7 @@ export async function drainOutbox(app: App, orderId?: string): Promise<void> {
     if (!claimed) continue;
     try {
       const link = await accessLink(app, r.to_phone, 'purchase');
-      await app.messages.send({ to: r.to_phone, name: String(r.buyer_name ?? '').split(' ')[0], link, kind: 'purchase' });
+      await app.messages.send({ to: r.to_phone, name: String(r.buyer_name ?? '').split(' ')[0], link, kind: r.kind === 'free' ? 'free' : 'purchase' });
       await app.db.query(`update message_outbox set status = 'sent', sent_at = now(), last_error = null where id = $1`, [r.id]);
     } catch (e) {
       await app.db.query(`update message_outbox set status = 'failed', last_error = $2 where id = $1`, [r.id, String((e as Error).message).slice(0, 300)]);
@@ -63,27 +64,28 @@ export async function drainOutbox(app: App, orderId?: string): Promise<void> {
   }
 }
 
-/** Purchase via API de Conversões (opcional). Sem telefone, nome ou respostas: só IP/UA/fbp/fbc. */
-export async function sendMetaPurchase(app: App, orderId: string): Promise<void> {
+/**
+ * Evento para a API de Conversões (opcional, com META_PIXEL_ID + META_CAPI_TOKEN). Usa o mesmo event_id do
+ * navegador para a Meta deduplicar. Sem telefone, nome ou respostas: só IP/UA/fbp/fbc, e só com consentimento.
+ */
+export async function sendMetaEvent(
+  app: App,
+  e: { key: MetaEventKey; eventId: string; attribution: Record<string, string> | null | undefined; valueCents?: number; at?: Date | string | null },
+): Promise<void> {
   const { pixelId, capiToken, testEventCode } = app.cfg.meta;
   if (!pixelId || !capiToken) return;
-  const o = await one(app.db, `select * from orders where id = $1`, [orderId]);
-  if (!o) return;
-  const a = (o.attribution ?? {}) as Record<string, string>;
+  const a = e.attribution ?? {};
   if (a.consent !== 'granted') return; // respeita a escolha de rastreamento
-  const body: any = {
-    data: [
-      {
-        event_name: 'Purchase',
-        event_time: Math.floor(new Date(o.paid_at ?? Date.now()).getTime() / 1000),
-        event_id: `purchase_${o.id}`,
-        action_source: 'website',
-        event_source_url: `${app.cfg.publicBaseUrl}/`,
-        user_data: { client_ip_address: a.ip, client_user_agent: a.ua, fbp: a.fbp, fbc: a.fbc },
-        custom_data: { currency: 'BRL', value: o.amount_cents / 100 },
-      },
-    ],
+  const data: any = {
+    event_name: META_EVENT_NAMES[e.key],
+    event_time: Math.floor(new Date(e.at ?? Date.now()).getTime() / 1000),
+    event_id: e.eventId,
+    action_source: 'website',
+    event_source_url: `${app.cfg.publicBaseUrl}/`,
+    user_data: { client_ip_address: a.ip, client_user_agent: a.ua, fbp: a.fbp, fbc: a.fbc },
   };
+  if (e.valueCents !== undefined) data.custom_data = { currency: 'BRL', value: e.valueCents / 100 };
+  const body: any = { data: [data] };
   if (testEventCode) body.test_event_code = testEventCode;
   try {
     await app.fetchImpl(`https://graph.facebook.com/v21.0/${pixelId}/events?access_token=${encodeURIComponent(capiToken)}`, {
@@ -92,9 +94,15 @@ export async function sendMetaPurchase(app: App, orderId: string): Promise<void>
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(5000),
     });
-  } catch (e) {
-    console.error('Meta CAPI falhou', (e as Error).message);
+  } catch (err) {
+    console.error('Meta CAPI falhou', (err as Error).message);
   }
+}
+
+export async function sendMetaPurchase(app: App, orderId: string): Promise<void> {
+  const o = await one(app.db, `select * from orders where id = $1`, [orderId]);
+  if (!o || o.amount_cents <= 0) return;
+  await sendMetaEvent(app, { key: 'Purchase', eventId: eventIds.purchase(o.id), attribution: o.attribution, valueCents: o.amount_cents, at: o.paid_at });
 }
 
 export async function afterApply(app: App, r: ApplyResult) {

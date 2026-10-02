@@ -1,4 +1,5 @@
 // Medição: só carrega o Pixel após consentimento. Nunca envia respostas, nome, telefone ou profissão.
+import { META_STANDARD_EVENTS } from '../shared/events';
 import { api, getConfig, storage } from './api';
 
 type Consent = 'granted' | 'denied' | 'unknown';
@@ -75,7 +76,6 @@ export function metaCookies() {
   return { fbp: c._fbp as string | undefined, fbc: c._fbc as string | undefined };
 }
 
-const STANDARD = new Set(['PageView', 'InitiateCheckout', 'Purchase']);
 const sent = new Set<string>();
 
 /** Evento no Pixel (se consentido) + registro no nosso servidor para eventos de navegador. */
@@ -87,7 +87,7 @@ export function track(name: string, opts: { eventId?: string; value?: number; se
   if (opts.eventId) storage.set(onceKey, '1');
   if (getConsent() === 'granted' && window.fbq) {
     const data = opts.value !== undefined ? { value: opts.value, currency: 'BRL' } : {};
-    window.fbq(STANDARD.has(name) ? 'track' : 'trackCustom', name, data, { eventID: eventId });
+    window.fbq(META_STANDARD_EVENTS.has(name) ? 'track' : 'trackCustom', name, data, { eventID: eventId });
   }
   if (opts.serverLog) {
     void api('POST', '/api/events', { name, event_id: eventId, consent: getConsent(), attribution: getAttribution() }).catch(() => undefined);

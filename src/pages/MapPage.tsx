@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { MOMENTS } from '../../shared/quiz';
 import { api, ApiFailure } from '../api';
+import { track } from '../analytics';
 
 type Card = {
   careerId: string; position: number; name: string; reasons: string[]; routine: string; attention: string;
@@ -12,6 +13,8 @@ type MapData = {
   public_ref: string;
   buyer_first_name: string;
   selected_career_id: string | null;
+  offer_mode: 'free' | 'paid';
+  diagnostic_interest: boolean;
   map: {
     broadProfile: boolean;
     summary: { topDimensions: { id: string; label: string }[]; explanation: string };
@@ -48,6 +51,8 @@ export function MapPage() {
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [refl, setRefl] = useState<Record<string, MapData['reflections'][number]>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [interest, setInterest] = useState(false);
+  const [interestBusy, setInterestBusy] = useState(false);
 
   useEffect(() => {
     api<MapData>('GET', `/api/results/${resultId}/full`)
@@ -56,6 +61,7 @@ export function MapPage() {
         setSelected(d.selected_career_id);
         setChecks(Object.fromEntries(d.progress.map((p) => [`${p.career_id}:${p.day}`, p.checked])));
         setRefl(Object.fromEntries(d.reflections.map((r) => [r.career_id, r])));
+        setInterest(d.diagnostic_interest);
       })
       .catch((e: ApiFailure) => setError({ status: e.status, message: e.message }));
   }, [resultId]);
@@ -87,6 +93,18 @@ export function MapPage() {
     await api('PUT', '/api/reflection', { result_id: resultId, ...next }).catch((e) => setSaveError((e as Error).message));
   }
 
+  async function markInterest() {
+    setInterestBusy(true);
+    try {
+      const r = await api('POST', '/api/interest', { result_id: resultId });
+      track('DiagnosticInterest', { eventId: r.event_id });
+      setInterest(true);
+    } catch (e) {
+      setSaveError((e as Error).message);
+    }
+    setInterestBusy(false);
+  }
+
   function printMap() {
     document.querySelectorAll('details').forEach((d) => d.setAttribute('open', ''));
     window.print();
@@ -110,7 +128,7 @@ export function MapPage() {
 
   return (
     <div className="wrap">
-      <span className="pill">Pedido {data.public_ref}</span>
+      <span className="pill">{data.offer_mode === 'free' ? 'Código' : 'Pedido'} {data.public_ref}</span>
       <h1 style={{ marginTop: 10 }}>{data.buyer_first_name}, este é o seu Mapa da Carreira</h1>
       <div className="card soft">
         {moment && <p><strong>Seu momento:</strong> {moment}</p>}
@@ -155,6 +173,20 @@ export function MapPage() {
           </button>
         </article>
       ))}
+
+
+      <section className="card interest-card no-print" aria-labelledby="interest-title">
+        <h2 id="interest-title">Quer ir além do mapa?</h2>
+        <p>Estamos preparando um trajeto personalizado, com um diagnóstico do caminho que você escolher e os próximos passos para começar.</p>
+        {interest ? (
+          <div className="status ok" role="status">Anotado! Vamos te chamar no WhatsApp quando o trajeto estiver disponível.</div>
+        ) : (
+          <button className="btn" onClick={markInterest} disabled={interestBusy}>
+            {interestBusy ? 'Registrando…' : 'Tenho interesse em receber um trajeto/diagnóstico'}
+          </button>
+        )}
+        <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>Sem compromisso. Você só recebe uma mensagem quando estiver disponível.</p>
+      </section>
 
       <section id="plano" style={{ marginTop: 24 }}>
         <h2>Plano de 7 dias</h2>
@@ -221,9 +253,14 @@ export function MapPage() {
         <p className="small">{map.common.howToEnter}</p>
       </div>
 
+      {!interest && (
+        <button className="btn secondary no-print" style={{ marginBottom: 12 }} onClick={markInterest} disabled={interestBusy}>
+          Tenho interesse em receber um trajeto/diagnóstico
+        </button>
+      )}
       <button className="btn secondary no-print" onClick={printMap}>Salvar ou imprimir</button>
       <p className="small muted" style={{ marginTop: 12 }}>
-        Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>.
+        Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>. Anote ou tire um print.
       </p>
     </div>
   );

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { getConfig } from './api';
+import { SocialProof } from './components/SocialProof';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { getConsent, setConsent, track } from './analytics';
 import { Access } from './pages/Access';
@@ -39,12 +41,16 @@ export function App() {
     if (loc.pathname === '/') track('PageView', { serverLog: true });
   }, [loc.pathname]);
   const isAdmin = loc.pathname.startsWith('/admin');
+  const [free, setFree] = useState(true);
+  useEffect(() => void getConfig().then((c) => setFree(c.offer_mode === 'free')).catch(() => undefined), []);
+  const showProof = ['/', '/teste', '/previa'].includes(loc.pathname);
   return (
     <>
       <header className="topbar no-print">
         <Link to="/" className="brand">Mapa da <span>Carreira</span></Link>
-        {!isAdmin && <Link to="/meus-mapas" className="small">Já comprei</Link>}
+        {!isAdmin && <Link to="/meus-mapas" className="small">{free ? 'Já fiz o teste' : 'Já comprei'}</Link>}
       </header>
+      {showProof && <SocialProof />}
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -63,7 +69,7 @@ export function App() {
       </main>
       {!isAdmin && (
         <footer className="footer no-print">
-          <Link to="/termos">Condições de venda</Link>
+          <Link to="/termos">{free ? 'Termos de uso' : 'Condições de venda'}</Link>
           <Link to="/privacidade">Privacidade</Link>
           <Link to="/ajuda">Ajuda</Link>
           <Link to="/acesso">Recuperar acesso</Link>

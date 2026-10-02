@@ -11,7 +11,7 @@ import type { App } from '../server/services';
 export const BASE = 'http://localhost:5173';
 
 export async function makeApp(env: Record<string, string> = {}): Promise<App> {
-  const cfg = loadConfig({ APP_ENV: 'test', PAYMENT_PROVIDER: 'fake', ADMIN_PASSWORD: 'adm', PUBLIC_BASE_URL: BASE, ...env });
+  const cfg = loadConfig({ APP_ENV: 'test', PAYMENT_PROVIDER: 'fake', ADMIN_PASSWORD: 'adm', PUBLIC_BASE_URL: BASE, OFFER_MODE: 'paid', ...env });
   sentMessages.length = 0;
   fakeStore.reset();
   return { cfg, db: await createPgliteDb(), provider: createProvider(cfg), messages: createMessageSender(cfg), fetchImpl: fetch };

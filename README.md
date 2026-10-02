@@ -6,6 +6,28 @@ Funil: anúncio → teste gratuito (12 perguntas) → prévia → oferta de **R$
 Implementa a especificação v1.0 (1/out/2026). Liberação **automática**: só com pagamento confirmado no servidor
 (webhook assinado + consulta à API). Nunca pela URL de retorno.
 
+## Modo atual: gratuito (validação de demanda)
+
+`OFFER_MODE=free` (padrão): teste → prévia → **nome + WhatsApp** (com consentimento) → mapa completo grátis →
+botão **"Tenho interesse em receber um trajeto/diagnóstico"**. Nada é cobrado e as rotas de pagamento ficam bloqueadas.
+Para voltar a vender, defina `OFFER_MODE=paid`: o checkout Pix do Mercado Pago volta como estava.
+
+**Eventos enviados à Meta** (Pixel no navegador + API de Conversões no servidor, com o mesmo `event_id` para deduplicar e só com o aceite de cookies):
+
+| Evento | Quando | Tipo |
+|---|---|---|
+| `QuizComplete` | terminou as 12 perguntas + contexto (alto engajamento) | personalizado |
+| `Lead` | deixou nome e WhatsApp | padrão |
+| `DiagnosticInterest` | clicou em "Tenho interesse" | personalizado |
+| `Purchase` | pagamento aprovado (modo pago) | padrão |
+
+Nenhum evento leva nome, telefone ou respostas. Para a API de Conversões, configure `META_PIXEL_ID` e `META_CAPI_TOKEN`.
+
+**Notificações no topo**: só com atividade real dos últimos 3 dias (`/api/social-proof`). O primeiro nome aparece apenas
+se a pessoa marcou a autorização; senão, "Uma pessoa". Sem atividade, nada aparece. Nunca são inventadas.
+
+**Admin → Leads**: lista com WhatsApp clicável, 1º caminho, momento, interesse e anúncio de origem; exportação CSV.
+
 ## Stack
 
 - **Frontend**: React + Vite (`src/`), mobile first. Recebe só a prévia antes da compra.
@@ -20,7 +42,7 @@ Implementa a especificação v1.0 (1/out/2026). Liberação **automática**: só
 ```bash
 npm install
 npm run dev        # API em :8788 (PGlite + provedor fake) e site em :5173
-npm test           # 39 testes: cálculo, Mercado Pago, WhatsApp, migrações, fluxo de pagamento e falhas
+npm test           # 45 testes: cálculo, Mercado Pago, WhatsApp, migrações, modo gratuito, eventos, painel
 npm run build && npm run check:bundle   # garante que o bundle não contém conteúdo pago
 ```
 

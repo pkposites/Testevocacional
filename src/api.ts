@@ -33,6 +33,7 @@ export type PublicConfig = {
   quiz_version: string;
   dev_tools: boolean;
   whatsapp_auto: boolean;
+  offer_mode: 'free' | 'paid';
 };
 
 let configPromise: Promise<PublicConfig> | undefined;

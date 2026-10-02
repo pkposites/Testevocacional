@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CURRENT_AREA_MAX, DAILY_TIMES, MOMENTS, QUESTIONS, SCALE, type Answers, type QuizContext } from '../../shared/quiz';
 import { api, ApiFailure, storage } from '../api';
-import { getAttribution, track } from '../analytics';
+import { getAttribution, getConsent, metaCookies, track } from '../analytics';
 
 const DRAFT_KEY = 'mc_draft';
 type Draft = { answers: Answers; context: QuizContext; step: number };
@@ -44,7 +44,7 @@ export function Quiz() {
         if (e instanceof ApiFailure && (e.status === 401 || e.code === 'new')) {
           storage.del(DRAFT_KEY);
           try {
-            await api('POST', '/api/quiz/sessions', { attribution: getAttribution() });
+            await api('POST', '/api/quiz/sessions', { attribution: getAttribution(), consent: getConsent(), ...metaCookies() });
           } catch (err) {
             setError((err as Error).message);
           }
@@ -82,8 +82,9 @@ export function Quiz() {
     try {
       await save(answers, context);
       await saveQueue.current;
-      await api('POST', '/api/results');
-      track('GameComplete');
+      const r = await api('POST', '/api/results', { consent: getConsent(), ...metaCookies() });
+      // Teste completo (alto engajamento): mesmo event_id que o servidor envia à API de Conversões.
+      track('QuizComplete', { eventId: r.event_id });
       // Animação breve (até 1 s) apenas enquanto o cálculo real termina.
       const wait = Math.max(0, 600 - (Date.now() - started));
       await new Promise((r) => setTimeout(r, wait));

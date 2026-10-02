@@ -4,6 +4,7 @@ export type AppConfig = {
   env: 'production' | 'development' | 'test';
   publicBaseUrl: string;
   paymentProvider: 'mercadopago' | 'kiwify' | 'fake';
+  offerMode: 'free' | 'paid';
   deliveryMode: 'automatic' | 'manual';
   manualDeliverySla: string;
   priceCents: number;
@@ -55,6 +56,7 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
     env,
     publicBaseUrl: (req(e.PUBLIC_BASE_URL, 'PUBLIC_BASE_URL', env) ?? 'http://localhost:5173').replace(/\/$/, ''),
     paymentProvider: provider,
+    offerMode: (e.OFFER_MODE ?? 'free') === 'paid' ? 'paid' : 'free',
     deliveryMode: (e.DELIVERY_MODE ?? 'automatic') as AppConfig['deliveryMode'],
     manualDeliverySla: e.MANUAL_DELIVERY_SLA ?? 'até 12 horas',
     priceCents,

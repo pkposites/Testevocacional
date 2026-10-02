@@ -223,3 +223,19 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .viz-table-wrap { -webkit-overflow-scrolling: touch; }
 .viz-table-wrap table.admin { min-width: 680px; }
 .viz-table-wrap table.admin td, .viz-table-wrap table.admin th { white-space: nowrap; word-break: normal; font-variant-numeric: tabular-nums; }
+.lead-card { border: 2px solid var(--accent); }
+.interest-card { background: var(--accent-soft); border-color: #f3c9ad; }
+
+/* notificações de atividade real */
+.proof { position: fixed; top: 10px; left: 50%; z-index: 30; width: min(calc(100% - 32px), 460px);
+  display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; background: #fff; border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 10px 30px rgba(19, 41, 75, 0.16); color: var(--text); font-size: 0.9rem; line-height: 1.35;
+  transform: translate(-50%, -140%); opacity: 0; transition: transform 0.35s ease, opacity 0.35s ease; pointer-events: none; }
+.proof.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+.proof-dot { flex: 0 0 10px; height: 10px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 0 4px #dcfce7; }
+.proof-text { flex: 1; }
+.proof-text strong { color: var(--title); }
+.proof-time { color: var(--muted); }
+.proof-close { flex: 0 0 36px; height: 36px; border: 0; background: none; color: var(--muted); border-radius: 10px; cursor: pointer; display: grid; place-items: center; }
+.proof-close:hover { background: var(--surface); }
+@media (prefers-reduced-motion: reduce) { .proof { transition: none; } }

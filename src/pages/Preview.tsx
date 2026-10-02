@@ -17,6 +17,8 @@ export function Preview() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [optIn, setOptIn] = useState(false);
+  const [contactOk, setContactOk] = useState(false);
+  const [publicName, setPublicName] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -43,6 +45,24 @@ export function Preview() {
     if (showForm) formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [showForm]);
 
+  async function submitFree(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resultId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api('POST', '/api/leads', {
+        result_id: resultId, buyer_name: name, buyer_phone: phone, contact_consent: contactOk, public_name_ok: publicName,
+        marketing_opt_in: contactOk, consent: getConsent(), ...metaCookies(),
+      });
+      track('Lead', { eventId: r.event_id });
+      nav(`/mapa/${r.result_id}`);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!resultId) return;
@@ -67,8 +87,72 @@ export function Preview() {
     }
   }
 
-  if (!summary) return <div className="wrap"><div className="spinner dark" aria-label="Carregando" /></div>;
+  if (!summary || !cfg) return <div className="wrap"><div className="spinner dark" aria-label="Carregando" /></div>;
   const price = brl(cfg?.price_cents ?? 1450);
+
+  if (cfg.offer_mode === 'free') {
+    return (
+      <div className="wrap">
+        <span className="pill">Sua prévia</span>
+        <h1 style={{ marginTop: 10 }}>
+          {summary.broadProfile ? 'Seu perfil reúne interesses variados' : `Você prefere ${summary.topDimensions[0].label} e ${summary.topDimensions[1].label}`}
+        </h1>
+        <p>{summary.explanation}</p>
+
+        {purchased ? (
+          <div className="card">
+            <div className="status ok">Seu mapa já está liberado.</div>
+            <Link className="btn" to={`/mapa/${purchased}`}>Abrir meu mapa</Link>
+          </div>
+        ) : (
+          <form className="card stack lead-card" onSubmit={submitFree} noValidate>
+            <h2 style={{ marginBottom: 0 }}>Seu mapa completo está pronto, e é grátis</h2>
+            <ul className="list" style={{ margin: 0 }}>
+              <li>Cinco caminhos sugeridos e os motivos</li>
+              <li>O que pode te incomodar em cada rotina</li>
+              <li>Um plano de sete dias para testar o caminho que escolher</li>
+            </ul>
+            <p className="small muted" style={{ margin: 0 }}>Informe seu nome e WhatsApp para liberar e guardar o seu mapa.</p>
+            <div>
+              <label htmlFor="name">Primeiro nome</label>
+              <input id="name" type="text" autoComplete="given-name" required minLength={2} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="phone">WhatsApp com DDD</label>
+              <input id="phone" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="(11) 98765-4321" required
+                value={phone} onChange={(e) => setPhone(maskBrPhone(e.target.value))} />
+              {phone.replace(/\D/g, '').length >= 11 && !normalizeBrPhone(phone) && (
+                <p className="small" style={{ color: 'var(--error)', marginTop: 6 }}>Confira o número: use DDD + celular com 9 dígitos.</p>
+              )}
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={contactOk} onChange={(e) => setContactOk(e.target.checked)} required />
+              <span>Quero receber meu resultado e contatos sobre ele pelo WhatsApp.</span>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={publicName} onChange={(e) => setPublicName(e.target.checked)} />
+              <span>Pode mostrar meu primeiro nome e meu 1º caminho nas notificações do site (opcional).</span>
+            </label>
+            {error && <div className="status error" role="alert">{error}</div>}
+            <button className="btn" type="submit" disabled={busy || name.trim().length < 2 || !normalizeBrPhone(phone) || !contactOk}>
+              {busy ? <><span className="spinner" /> Liberando…</> : 'Ver meu mapa completo grátis'}
+            </button>
+            <p className="small muted" style={{ margin: 0 }}>
+              Seus dados não são compartilhados. Veja a <Link to="/privacidade">política de privacidade</Link> e os <Link to="/termos">termos de uso</Link>.
+            </p>
+          </form>
+        )}
+
+        <div className="card soft">
+          <h3>Exercício rápido para hoje</h3>
+          <p>Anote uma tarefa que te dá energia e uma que te desgasta.</p>
+          <p className="small muted">Compare com suas preferências acima: elas costumam aparecer nas tarefas que dão energia.</p>
+        </div>
+        <p className="small muted">As sugestões consideram somente os caminhos disponíveis neste catálogo.</p>
+        <p className="small" style={{ marginTop: 16 }}><Link to="/teste">Revisar minhas respostas</Link></p>
+      </div>
+    );
+  }
 
   return (
     <div className="wrap">

@@ -5,8 +5,10 @@ import { api, brl, storage } from '../api';
 // cores categóricas 1–3 em ordem fixa; status sempre com ícone + texto.
 
 type Item = { key: string; label: string; value: number; text?: string };
-type Day = { day: string; visits: number; started: number; completed: number; checkouts: number; purchases: number; revenueCents: number };
+type Day = { day: string; visits: number; started: number; completed: number; checkouts: number; purchases: number; revenueCents: number; leads: number; interested: number };
 type Data = {
+  mode: 'free' | 'paid';
+  leads: { total: number; interested: number; publicNameOk: number };
   range: { from: string; to: string };
   funnel: Item[];
   questions: Item[];
@@ -14,12 +16,12 @@ type Data = {
   daily: Day[];
   orders: { created: number; pixGenerated: number; paid: number; expired: number; refunded: number; medianMinutesToPay: number | null };
   revenue: { grossCents: number; netCents: number; purchases: number };
-  sources: { source: string; adset: string; sessions: number; started: number; completed: number; orders: number; paid: number; revenueCents: number }[];
+  sources: { source: string; adset: string; sessions: number; started: number; completed: number; orders: number; paid: number; leads: number; interested: number; revenueCents: number }[];
   profile: {
     moments: { key: string; c: number }[];
     dailyTime: { key: string; c: number }[];
     preferences: { key: string; c: number }[];
-    topCareer: { key: string; c: number; paid: number }[];
+    topCareer: { key: string; c: number; paid: number; leads: number; interested: number }[];
     broad: number;
   };
   delivery: { entitlements: number; accessed: number; plan_started: number; plan_done: number; avg_days: number; decisions: { key: string; c: number }[] };
@@ -194,7 +196,7 @@ function QuestionDrop({ items, started }: { items: Item[]; started: number }) {
 }
 
 /** Série diária: 3 linhas na mesma escala (pessoas), crosshair com tooltip, legenda + rótulo no fim. */
-function DailyLines({ days }: { days: Day[] }) {
+function DailyLines({ days, free }: { days: Day[]; free: boolean }) {
   const tip = useTip();
   const [hover, setHover] = useState<number | null>(null);
   const size = useWidth();
@@ -212,7 +214,7 @@ function DailyLines({ days }: { days: Day[] }) {
     const i = Math.max(0, Math.min(days.length - 1, Math.round(((px - padL) / (W - padL - padR)) * (days.length - 1))));
     setHover(i);
     const d = days[i];
-    tip.show(e, [fmtDay(d.day), ...SERIES.map((s) => `${s.label}: ${fmtInt(d[s.key])}`), `Compras: ${fmtInt(d.purchases)} · ${brl(d.revenueCents)}`]);
+    tip.show(e, [fmtDay(d.day), ...SERIES.map((s) => `${s.label}: ${fmtInt(d[s.key])}`), free ? `Leads: ${fmtInt(d.leads)} · interesse: ${fmtInt(d.interested)}` : `Compras: ${fmtInt(d.purchases)} · ${brl(d.revenueCents)}`]);
   };
   return (
     <div className="viz-chart" ref={tip.ref}>
@@ -312,15 +314,20 @@ export function Dashboard() {
     const steps = data.funnel.slice(1).map((it, i) => ({ it, prev: data.funnel[i], r: pct(it.value, data.funnel[i].value) }));
     const worst = steps.filter((s) => s.prev.value >= 5 && s.r != null).sort((a, b) => a.r! - b.r!)[0];
     if (worst) out.push(`Maior gargalo do funil: de “${worst.prev.label}” para “${worst.it.label}” passam só ${fmtPct(worst.r, 0)}.`);
-    if (k.neededConv != null && k.conv != null) {
+    if (data.mode === 'free') {
+      if (data.leads.total > 0) out.push(`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads pediram o trajeto/diagnóstico: este é o principal sinal de demanda para a versão paga.`);
+      if (k.f.completed > 0) out.push(`${fmtPct(pct(data.leads.total, k.f.completed), 0)} de quem terminou o teste deixou nome e WhatsApp.`);
+    }
+    if (data.mode === 'paid' && k.neededConv != null && k.conv != null) {
       out.push(k.conv >= k.neededConv
         ? `Conversão visita→compra de ${fmtPct(k.conv)} supera os ${fmtPct(k.neededConv)} necessários para ROAS ${ROAS_GOAL} ao custo atual por visita (${brl(Math.round(k.cpv! * 100))}).`
         : `Para ROAS ${ROAS_GOAL} com custo por visita de ${brl(Math.round(k.cpv! * 100))}, a conversão visita→compra precisa ser ${fmtPct(k.neededConv)}; hoje está em ${fmtPct(k.conv)}.`);
     }
     const pixRate = pct(data.orders.paid, data.orders.pixGenerated);
     if (data.orders.pixGenerated >= 3 && pixRate != null) out.push(`${fmtPct(pixRate, 0)} de quem gerou o Pix pagou${data.orders.medianMinutesToPay != null ? `, em ${fmtMin(data.orders.medianMinutesToPay)} (mediana)` : ''}.`);
-    const bestAd = data.sources.filter((s) => s.sessions >= 5 && s.source !== '(sem UTM / direto)').sort((a, b) => (b.paid / b.sessions) - (a.paid / a.sessions) || (b.completed / b.sessions) - (a.completed / a.sessions))[0];
-    if (bestAd) out.push(`Melhor anúncio: “${bestAd.source}” — ${fmtPct(pct(bestAd.completed, bestAd.sessions), 0)} terminam o teste e ${fmtPct(pct(bestAd.paid, bestAd.sessions))} compram.`);
+    const goal = (x: Data['sources'][number]) => (data.mode === 'free' ? x.interested : x.paid);
+    const bestAd = data.sources.filter((s) => s.sessions >= 5 && s.source !== '(sem UTM / direto)').sort((a, b) => (goal(b) / b.sessions) - (goal(a) / a.sessions) || (b.completed / b.sessions) - (a.completed / a.sessions))[0];
+    if (bestAd) out.push(`Melhor anúncio: “${bestAd.source}” — ${fmtPct(pct(bestAd.completed, bestAd.sessions), 0)} terminam o teste e ${fmtPct(pct(goal(bestAd), bestAd.sessions))} ${data.mode === 'free' ? 'pedem o diagnóstico' : 'compram'}.`);
     const granted = data.consent.find((c) => c.key === 'granted')?.c ?? 0;
     const allConsent = data.consent.reduce((s, c) => s + c.c, 0);
     if (allConsent >= 10) out.push(`${fmtPct(pct(granted, allConsent), 0)} das visitas aceitaram cookies; só essas aparecem no Pixel da Meta.`);
@@ -348,10 +355,21 @@ export function Dashboard() {
             <Tile label="Visitas" value={fmtInt(k.f.visits)} sub={k.cpv != null ? `${brl(Math.round(k.cpv * 100))} por visita` : 'página inicial'} />
             <Tile label="Começaram o teste" value={fmtInt(k.f.started)} sub={`${fmtPct(pct(k.f.started, k.f.visits), 0)} das visitas`} />
             <Tile label="Terminaram o teste" value={fmtInt(k.f.completed)} sub={`${fmtPct(pct(k.f.completed, k.f.started), 0)} de quem começou · ${fmtMin(data.quiz.medianMinutesToResult)}`} />
-            <Tile label="Compras" value={fmtInt(data.revenue.purchases)} sub={`${fmtPct(k.conv)} das visitas`} />
-            <Tile label="Receita" value={brl(data.revenue.grossCents)} sub={data.orders.refunded ? `${data.orders.refunded} reembolso(s) · líquida ${brl(data.revenue.netCents)}` : 'bruta'} />
-            <Tile label="ROAS" value={k.roas != null ? k.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'} sub={spend > 0 ? `meta ${ROAS_GOAL}` : 'informe o investimento'} status={k.roas != null ? (k.roas >= ROAS_GOAL ? 'good' : 'bad') : null} />
-            <Tile label="Custo por compra" value={k.cpa != null ? brl(Math.round(k.cpa * 100)) : '—'} sub={`meta até ${brl(Math.floor(CPA_GOAL * 100))}`} status={k.cpa != null ? (k.cpa <= CPA_GOAL ? 'good' : 'bad') : null} />
+            {data.mode === 'free' ? (
+              <>
+                <Tile label="Leads (nome + WhatsApp)" value={fmtInt(data.leads.total)} sub={`${fmtPct(pct(data.leads.total, k.f.completed), 0)} de quem terminou`} />
+                <Tile label="Interesse no diagnóstico" value={fmtInt(data.leads.interested)} sub={`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads`} />
+                <Tile label="Custo por lead" value={spend > 0 && data.leads.total ? brl(Math.round((spend / data.leads.total) * 100)) : '—'} sub={spend > 0 ? undefined : 'informe o investimento'} />
+                <Tile label="Custo por interessado" value={spend > 0 && data.leads.interested ? brl(Math.round((spend / data.leads.interested) * 100)) : '—'} sub="sinal de demanda" />
+              </>
+            ) : (
+              <>
+                <Tile label="Compras" value={fmtInt(data.revenue.purchases)} sub={`${fmtPct(k.conv)} das visitas`} />
+                <Tile label="Receita" value={brl(data.revenue.grossCents)} sub={data.orders.refunded ? `${data.orders.refunded} reembolso(s) · líquida ${brl(data.revenue.netCents)}` : 'bruta'} />
+                <Tile label="ROAS" value={k.roas != null ? k.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'} sub={spend > 0 ? `meta ${ROAS_GOAL}` : 'informe o investimento'} status={k.roas != null ? (k.roas >= ROAS_GOAL ? 'good' : 'bad') : null} />
+                <Tile label="Custo por compra" value={k.cpa != null ? brl(Math.round(k.cpa * 100)) : '—'} sub={`meta até ${brl(Math.floor(CPA_GOAL * 100))}`} status={k.cpa != null ? (k.cpa <= CPA_GOAL ? 'good' : 'bad') : null} />
+              </>
+            )}
           </div>
 
           {insights.length > 0 && (
@@ -391,7 +409,7 @@ export function Dashboard() {
                   ))}</tbody>
                 </table>
               </div>
-            ) : <DailyLines days={data.daily} />}
+            ) : <DailyLines days={data.daily} free={data.mode === 'free'} />}
           </section>
 
           <section className="viz-card">
@@ -399,14 +417,18 @@ export function Dashboard() {
             <p className="viz-sub">Agrupado pela UTM do anúncio (utm_content). Sessões = quem abriu o teste.</p>
             <div className="viz-table-wrap">
               <table className="admin">
-                <thead><tr><th>Origem</th><th>Conjunto</th><th>Sessões</th><th>Começaram</th><th>Terminaram</th><th>Pix</th><th>Compras</th><th>Conv.</th><th>Receita</th></tr></thead>
+                <thead><tr><th>Origem</th><th>Conjunto</th><th>Sessões</th><th>Começaram</th><th>Terminaram</th>{data.mode === 'free'
+                  ? <><th>Leads</th><th>Interesse</th><th>Conv. lead</th><th>Conv. interesse</th></>
+                  : <><th>Pix</th><th>Compras</th><th>Conv.</th><th>Receita</th></>}</tr></thead>
                 <tbody>
                   {data.sources.length === 0 && <tr><td colSpan={9} className="muted">Sem sessões no período.</td></tr>}
                   {data.sources.map((s) => (
                     <tr key={s.source + s.adset}>
                       <td>{s.source}</td><td>{s.adset || '—'}</td><td>{s.sessions}</td>
                       <td>{fmtPct(pct(s.started, s.sessions), 0)}</td><td>{fmtPct(pct(s.completed, s.sessions), 0)}</td>
-                      <td>{s.orders}</td><td>{s.paid}</td><td>{fmtPct(pct(s.paid, s.sessions))}</td><td>{brl(s.revenueCents)}</td>
+                      {data.mode === 'free'
+                        ? <><td>{s.leads}</td><td>{s.interested}</td><td>{fmtPct(pct(s.leads, s.sessions))}</td><td>{fmtPct(pct(s.interested, s.sessions))}</td></>
+                        : <><td>{s.orders}</td><td>{s.paid}</td><td>{fmtPct(pct(s.paid, s.sessions))}</td><td>{brl(s.revenueCents)}</td></>}
                     </tr>
                   ))}
                 </tbody>
@@ -415,7 +437,7 @@ export function Dashboard() {
           </section>
 
           <div className="viz-grid-2">
-            <section className="viz-card">
+            {data.mode === 'paid' ? <section className="viz-card">
               <h3>Pagamento</h3>
               <div className="viz-tiles small">
                 <Tile label="Pix gerados" value={fmtInt(data.orders.pixGenerated)} />
@@ -423,14 +445,21 @@ export function Dashboard() {
                 <Tile label="Expirados" value={fmtInt(data.orders.expired)} sub="sem pagamento" />
                 <Tile label="Tempo até pagar" value={fmtMin(data.orders.medianMinutesToPay)} sub="mediana" />
               </div>
-            </section>
-            <section className="viz-card">
-              <h3>Uso do mapa pago</h3>
+            </section> : <section className="viz-card">
+              <h3>Contatos</h3>
               <div className="viz-tiles small">
-                <Tile label="Abriram o mapa" value={fmtInt(data.delivery.accessed)} sub={`${fmtPct(pct(data.delivery.accessed, data.delivery.entitlements), 0)} dos compradores`} />
+                <Tile label="Leads" value={fmtInt(data.leads.total)} />
+                <Tile label="Pediram diagnóstico" value={fmtInt(data.leads.interested)} sub={fmtPct(pct(data.leads.interested, data.leads.total), 0)} />
+                <Tile label="Autorizaram nome nas notificações" value={fmtInt(data.leads.publicNameOk)} sub={fmtPct(pct(data.leads.publicNameOk, data.leads.total), 0)} />
+              </div>
+            </section>}
+            <section className="viz-card">
+              <h3>{data.mode === 'free' ? 'Uso do mapa' : 'Uso do mapa pago'}</h3>
+              <div className="viz-tiles small">
+                <Tile label="Abriram o mapa" value={fmtInt(data.delivery.accessed)} sub={`${fmtPct(pct(data.delivery.accessed, data.delivery.entitlements), 0)} ${data.mode === 'free' ? 'dos leads' : 'dos compradores'}`} />
                 <Tile label="Começaram o plano" value={fmtInt(data.delivery.plan_started)} sub={`${fmtPct(pct(data.delivery.plan_started, data.delivery.entitlements), 0)}`} />
                 <Tile label="Fizeram os 7 dias" value={fmtInt(data.delivery.plan_done)} />
-                <Tile label="Dias marcados" value={data.delivery.avg_days.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} sub="média por comprador" />
+                <Tile label="Dias marcados" value={data.delivery.avg_days.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} sub={data.mode === 'free' ? 'média por lead' : 'média por comprador'} />
               </div>
               {data.delivery.decisions.length > 0 && (
                 <BarList rows={data.delivery.decisions.map((d) => ({ label: DECISION[d.key] ?? d.key, value: d.c }))} total={data.delivery.decisions.reduce((s, d) => s + d.c, 0)} />
@@ -448,8 +477,8 @@ export function Dashboard() {
             </section>
             <section className="viz-card">
               <h3>Resultados</h3>
-              <p className="viz-sub">1º caminho sugerido · compras de quem recebeu</p>
-              <BarList extra="paid" rows={data.profile.topCareer.map((c) => ({ label: c.key, value: c.c, extra: `${c.paid} compra(s)` }))} total={data.profile.topCareer.reduce((s, c) => s + c.c, 0)} />
+              <p className="viz-sub">1º caminho sugerido · {data.mode === 'free' ? 'interesse no diagnóstico' : 'compras'} de quem recebeu</p>
+              <BarList extra="paid" rows={data.profile.topCareer.map((c) => ({ label: c.key, value: c.c, extra: data.mode === 'free' ? `${c.interested} interesse(s)` : `${c.paid} compra(s)` }))} total={data.profile.topCareer.reduce((s, c) => s + c.c, 0)} />
               <p className="viz-sub" style={{ marginTop: 16 }}>Duas preferências mais fortes</p>
               <BarList rows={data.profile.preferences.map((c) => ({ label: c.key, value: c.c }))} total={data.profile.preferences.reduce((s, c) => s + c.c, 0)} />
             </section>
