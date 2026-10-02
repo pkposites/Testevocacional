@@ -30,7 +30,7 @@ describe('Mercado Pago Orders + Pix', () => {
       captured = { url, init };
       return new Response(JSON.stringify(pixOrder), { status: 201 });
     }) as any);
-    const r = await mp.createCheckout({ orderId: pixOrder.external_reference, publicRef: 'MC-X', attempt: 1, amountCents: 1450, buyerEmail: 'a@b.com', buyerName: 'Ana', description: 'Mapa', attribution: {} });
+    const r = await mp.createCheckout({ orderId: pixOrder.external_reference, publicRef: 'MC-X', attempt: 1, amountCents: 1450, buyerPhone: '5511987654321', buyerName: 'Ana', description: 'Mapa', attribution: {} });
     expect(captured!.url).toBe('https://api.mercadopago.com/v1/orders');
     const h = captured!.init.headers as Record<string, string>;
     expect(h.Authorization).toBe('Bearer TEST-token');

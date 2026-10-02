@@ -14,6 +14,7 @@ export type AppConfig = {
     accessToken?: string;
     webhookSecret?: string;
     expectedUserId?: string;
+    payerEmailTemplate?: string;
     pixExpirationMinutes: number;
     apiBase: string;
   };
@@ -23,10 +24,12 @@ export type AppConfig = {
     refField: string;
     productId?: string;
   };
-  email: {
-    provider: 'resend' | 'log';
-    resendApiKey?: string;
-    from: string;
+  whatsapp: {
+    provider: 'cloud' | 'none' | 'log';
+    token?: string;
+    phoneNumberId?: string;
+    templateName?: string;
+    templateLang: string;
   };
   supportContact: string;
   seller: { name: string; document: string; address: string };
@@ -62,6 +65,7 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
       accessToken: e.MP_ACCESS_TOKEN,
       webhookSecret: e.MP_WEBHOOK_SECRET,
       expectedUserId: e.MP_EXPECTED_USER_ID,
+      payerEmailTemplate: e.MP_PAYER_EMAIL_TEMPLATE,
       pixExpirationMinutes: Number(e.MP_PIX_EXPIRATION_MINUTES ?? 30),
       apiBase: e.MP_API_BASE ?? 'https://api.mercadopago.com',
     },
@@ -71,10 +75,12 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
       refField: e.KIWIFY_REF_FIELD ?? 'TrackingParameters.s1',
       productId: e.KIWIFY_PRODUCT_ID,
     },
-    email: {
-      provider: (e.EMAIL_PROVIDER ?? (e.RESEND_API_KEY ? 'resend' : 'log')) as 'resend' | 'log',
-      resendApiKey: e.RESEND_API_KEY,
-      from: e.EMAIL_FROM ?? 'Mapa da Carreira <nao-responda@example.com>',
+    whatsapp: {
+      provider: (e.WHATSAPP_PROVIDER ?? (e.WHATSAPP_TOKEN ? 'cloud' : env === 'production' ? 'none' : 'log')) as AppConfig['whatsapp']['provider'],
+      token: e.WHATSAPP_TOKEN,
+      phoneNumberId: e.WHATSAPP_PHONE_NUMBER_ID,
+      templateName: e.WHATSAPP_TEMPLATE_NAME,
+      templateLang: e.WHATSAPP_TEMPLATE_LANG ?? 'pt_BR',
     },
     supportContact: e.SUPPORT_CONTACT ?? 'suporte@example.com',
     seller: {
@@ -87,7 +93,11 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
     purchaseLinkTtlHours: Number(e.PURCHASE_LINK_TTL_HOURS ?? 168),
   };
 
+  if (cfg.whatsapp.provider === 'cloud' && (!cfg.whatsapp.token || !cfg.whatsapp.phoneNumberId || !cfg.whatsapp.templateName)) {
+    throw new Error('WhatsApp cloud exige WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID e WHATSAPP_TEMPLATE_NAME');
+  }
   if (env === 'production') {
+    if (cfg.whatsapp.provider === 'log') throw new Error('WHATSAPP_PROVIDER=log não é permitido em produção');
     if (cfg.appSecret.length < 32) throw new Error('APP_SECRET precisa de pelo menos 32 caracteres');
     if (provider === 'mercadopago' && (!cfg.mp.accessToken || !cfg.mp.webhookSecret)) {
       throw new Error('MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET são obrigatórios com Mercado Pago');

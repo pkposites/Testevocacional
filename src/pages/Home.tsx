@@ -40,7 +40,7 @@ export function Home() {
           <li>Vê de graça suas duas preferências mais fortes e um exercício rápido.</li>
           <li>Se quiser, desbloqueia o mapa completo: cinco caminhos, os motivos e um plano prático de 7 dias.</li>
         </ol>
-        <p className="small muted">Não pedimos e-mail para mostrar a prévia.</p>
+        <p className="small muted">Não pedimos seus contatos para mostrar a prévia.</p>
       </div>
       <p className="small"><Link to="/meus-mapas">Já comprei e quero acessar meu mapa</Link></p>
     </div>

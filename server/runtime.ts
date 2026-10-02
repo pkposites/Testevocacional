@@ -1,7 +1,7 @@
 // Monta a aplicação a partir das variáveis de ambiente (reaproveitada entre invocações quentes).
 import { loadConfig } from './config';
 import { createPgliteDb, createPostgresDb } from './db';
-import { createEmailSender } from './email';
+import { createMessageSender } from './whatsapp';
 import { createProvider } from './payments';
 import type { App } from './services';
 
@@ -17,7 +17,7 @@ export function getApp(): Promise<App> {
       url = getConnectionString();
     }
     const db = url ? await createPostgresDb(url) : await createPgliteDb(process.env.PGLITE_DIR || undefined);
-    return { cfg, db, provider: createProvider(cfg), sendEmail: createEmailSender(cfg), fetchImpl: fetch };
+    return { cfg, db, provider: createProvider(cfg), messages: createMessageSender(cfg), fetchImpl: fetch };
   })().catch((e) => {
     appPromise = undefined;
     throw e;

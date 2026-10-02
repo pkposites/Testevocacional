@@ -79,7 +79,7 @@ small, .muted { color: var(--muted); }
 .stack > * + * { margin-top: 12px; }
 
 label { display: block; font-weight: 600; color: var(--title); margin-bottom: 6px; }
-input[type='text'], input[type='email'], input[type='password'], textarea {
+input[type='text'], input[type='tel'], input[type='password'], textarea {
   width: 100%; min-height: 48px; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; font: inherit; font-size: 16px; background: #fff; color: var(--text);
 }
 .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; color: var(--text); font-size: 0.95rem; min-height: 44px; }
@@ -147,3 +147,6 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
   details { display: block; }
   details > :not(summary) { display: block !important; }
 }
+
+.order-code { text-align: center; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; background: var(--warn-soft); color: var(--warn); }
+.order-code strong { display: block; font-size: 1.5rem; letter-spacing: 0.08em; color: var(--title); white-space: nowrap; margin: 2px 0; }

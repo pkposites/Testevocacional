@@ -36,7 +36,7 @@ create table if not exists orders (
   amount_cents integer not null check (amount_cents > 0),
   currency text not null default 'BRL',
   buyer_name text not null,
-  buyer_email text not null,
+  buyer_phone text not null,
   marketing_opt_in boolean not null default false,
   status text not null default 'created'
     check (status in ('created','pending','paid','expired','cancelled','refunded','disputed')),
@@ -47,7 +47,7 @@ create table if not exists orders (
   paid_at timestamptz,
   last_reconciled_at timestamptz
 );
-create index if not exists orders_email_idx on orders (lower(buyer_email));
+create index if not exists orders_phone_idx on orders (buyer_phone);
 create index if not exists orders_result_idx on orders (result_id);
 
 create table if not exists payments (
@@ -76,19 +76,19 @@ create table if not exists entitlements (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null unique references orders(id),
   result_id uuid not null references results(id),
-  buyer_email text not null,
+  buyer_phone text not null,
   state text not null default 'active' check (state in ('active','revoked')),
   selected_career_id text,
   first_access_at timestamptz,
   created_at timestamptz not null default now(),
   revoked_at timestamptz
 );
-create index if not exists entitlements_email_idx on entitlements (lower(buyer_email));
+create index if not exists entitlements_phone_idx on entitlements (buyer_phone);
 
 create table if not exists access_tokens (
   id uuid primary key default gen_random_uuid(),
   token_hash text not null unique,
-  buyer_email text not null,
+  buyer_phone text not null,
   purpose text not null check (purpose in ('purchase','recover')),
   expires_at timestamptz not null,
   used_at timestamptz,
@@ -98,7 +98,7 @@ create table if not exists access_tokens (
 create table if not exists access_sessions (
   id uuid primary key default gen_random_uuid(),
   token_hash text not null unique,
-  buyer_email text not null,
+  buyer_phone text not null,
   expires_at timestamptz not null,
   created_at timestamptz not null default now()
 );
@@ -148,18 +148,18 @@ create table if not exists webhook_events (
   unique (provider, event_key)
 );
 
-create table if not exists email_outbox (
+create table if not exists message_outbox (
   id uuid primary key default gen_random_uuid(),
   order_id uuid references orders(id),
   kind text not null,
-  to_email text not null,
+  to_phone text not null,
   status text not null default 'pending' check (status in ('pending','sent','failed')),
   attempts integer not null default 0,
   last_error text,
   created_at timestamptz not null default now(),
   sent_at timestamptz
 );
-create unique index if not exists email_outbox_purchase_once on email_outbox (order_id) where kind = 'purchase';
+create unique index if not exists message_outbox_purchase_once on message_outbox (order_id) where kind = 'purchase';
 
 create table if not exists admin_audit (
   id uuid primary key default gen_random_uuid(),
@@ -190,6 +190,6 @@ alter table progress enable row level security;
 alter table reflections enable row level security;
 alter table events enable row level security;
 alter table webhook_events enable row level security;
-alter table email_outbox enable row level security;
+alter table message_outbox enable row level security;
 alter table admin_audit enable row level security;
 alter table rate_limits enable row level security;

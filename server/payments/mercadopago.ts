@@ -90,6 +90,20 @@ export function verifyMpSignature(opts: { secret: string; xSignature: string | n
   return safeEqual(hmacHex('sha256', opts.secret, manifest), v1.toLowerCase());
 }
 
+/**
+ * Pagador sem e-mail: o comprador informa só nome e WhatsApp. Se a conta exigir e-mail do pagador,
+ * definir MP_PAYER_EMAIL_TEMPLATE (ex.: "pix+{ref}@seudominio.com.br"); nunca usar o e-mail da conta recebedora.
+ */
+export function mpPayer(cfg: AppConfig, input: CreateCheckoutInput) {
+  const local = input.buyerPhone.startsWith('55') ? input.buyerPhone.slice(2) : input.buyerPhone;
+  const payer: Record<string, unknown> = {
+    first_name: input.buyerName,
+    phone: { area_code: local.slice(0, 2), number: local.slice(2) },
+  };
+  if (cfg.mp.payerEmailTemplate) payer.email = cfg.mp.payerEmailTemplate.replace('{ref}', input.publicRef.toLowerCase());
+  return payer;
+}
+
 export function createMercadoPago(cfg: AppConfig, fetchImpl: typeof fetch = fetch): PaymentProvider {
   const base = cfg.mp.apiBase;
   const auth = () => {
@@ -130,8 +144,8 @@ export function createMercadoPago(cfg: AppConfig, fetchImpl: typeof fetch = fetc
         processing_mode: 'automatic',
         external_reference: input.orderId,
         total_amount: amount,
-        description: input.description,
-        payer: { email: input.buyerEmail, first_name: input.buyerName },
+        description: `${input.description} ${input.publicRef}`,
+        payer: mpPayer(cfg, input),
         transactions: {
           payments: [
             {

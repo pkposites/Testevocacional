@@ -19,7 +19,7 @@ export function MyMaps() {
   return (
     <div className="wrap">
       <h1>Meus mapas</h1>
-      {maps.length === 0 && <p>Nenhum mapa liberado para este e-mail.</p>}
+      {maps.length === 0 && <p>Nenhum mapa liberado para este WhatsApp.</p>}
       {maps.map((m) => (
         <Link key={m.result_id} to={`/mapa/${m.result_id}`} className="card" style={{ display: 'block', textDecoration: 'none' }}>
           <strong>Pedido {m.public_ref}</strong>

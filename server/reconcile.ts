@@ -93,12 +93,12 @@ export async function applyProviderState(db: Db, cfg: AppConfig, provider: strin
 
       await t.query(`update orders set status = 'paid', paid_at = now(), updated_at = now() where id = $1`, [order.id]);
       await t.query(
-        `insert into entitlements (order_id, result_id, buyer_email, state) values ($1,$2,$3,'active') on conflict (order_id) do nothing`,
-        [order.id, order.result_id, order.buyer_email],
+        `insert into entitlements (order_id, result_id, buyer_phone, state) values ($1,$2,$3,'active') on conflict (order_id) do nothing`,
+        [order.id, order.result_id, order.buyer_phone],
       );
       await t.query(
-        `insert into email_outbox (order_id, kind, to_email) values ($1,'purchase',$2) on conflict do nothing`,
-        [order.id, order.buyer_email],
+        `insert into message_outbox (order_id, kind, to_phone) values ($1,'purchase',$2) on conflict do nothing`,
+        [order.id, order.buyer_phone],
       );
       await t.query(
         `insert into events (event_id, session_id, order_id, name, attribution) values ($1,$2,$3,'Purchase',$4::jsonb) on conflict (event_id) do nothing`,

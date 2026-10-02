@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { maskBrPhone, normalizeBrPhone } from '../../shared/phone';
 import { api, brl, getConfig, storage, type PublicConfig } from '../api';
 import { getConsent, metaCookies, track } from '../analytics';
 
@@ -14,7 +15,7 @@ export function Preview() {
   const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [optIn, setOptIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export function Preview() {
     storage.set(keyName, idem);
     try {
       const o = await api('POST', '/api/orders', {
-        result_id: resultId, buyer_name: name, buyer_email: email, marketing_opt_in: optIn, consent: getConsent(), ...metaCookies(),
+        result_id: resultId, buyer_name: name, buyer_phone: phone, marketing_opt_in: optIn, consent: getConsent(), ...metaCookies(),
       }, { 'Idempotency-Key': idem });
       track('InitiateCheckout', { eventId: `ic_${o.order_id}`, value: o.amount_cents / 100 });
       if (o.next_action === 'redirect' && o.checkout_url) {
@@ -104,7 +105,7 @@ export function Preview() {
           <div className="price">{price}</div>
           <p className="small muted">Pagamento único via Pix. Acesso após confirmação. Sem assinatura.</p>
           {cfg?.delivery_mode === 'manual' && (
-            <div className="status warn">Liberação conferida manualmente: seu acesso chega por e-mail em {cfg.manual_delivery_sla} após a confirmação do Pix.</div>
+            <div className="status warn">Liberação conferida manualmente: seu acesso chega pelo WhatsApp em {cfg.manual_delivery_sla} após a confirmação do Pix.</div>
           )}
           {!showForm && (
             <button className="btn" onClick={() => { track('CheckoutClick', { serverLog: true }); setShowForm(true); }}>
@@ -119,26 +120,30 @@ export function Preview() {
 
       {showForm && !purchased && (
         <form ref={formRef} className="card stack" onSubmit={submit} noValidate>
-          <h3>Para onde enviamos seu acesso?</h3>
-          <p className="small muted">Usamos seu e-mail para você recuperar a compra em qualquer aparelho.</p>
+          <h3>Para identificar sua compra</h3>
+          <p className="small muted">Com seu WhatsApp e o código do pedido, você abre o mapa em qualquer aparelho.</p>
           <div>
             <label htmlFor="name">Primeiro nome</label>
             <input id="name" type="text" autoComplete="given-name" required minLength={2} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <label htmlFor="email">E-mail</label>
-            <input id="email" type="email" inputMode="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label htmlFor="phone">WhatsApp com DDD</label>
+            <input id="phone" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="(11) 98765-4321" required
+              value={phone} onChange={(e) => setPhone(maskBrPhone(e.target.value))} />
+            {phone.replace(/\D/g, '').length >= 11 && !normalizeBrPhone(phone) && (
+              <p className="small" style={{ color: 'var(--error)', marginTop: 6 }}>Confira o número: use DDD + celular com 9 dígitos.</p>
+            )}
           </div>
           <label className="check">
             <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} />
-            <span>Quero receber novidades e ofertas por e-mail (opcional).</span>
+            <span>Quero receber novidades e ofertas pelo WhatsApp (opcional).</span>
           </label>
           <div className="card soft small" style={{ margin: 0 }}>
             <strong>Mapa da Carreira</strong> · {price} · Pix via {cfg?.provider === 'kiwify' ? 'Kiwify' : 'Mercado Pago'}
             <br />A compra cobre este mapa, gerado com as respostas atuais. Refazer o teste gera outro resultado.
           </div>
           {error && <div className="status error" role="alert">{error}</div>}
-          <button className="btn" type="submit" disabled={busy || name.trim().length < 2 || !email.includes('@')}>
+          <button className="btn" type="submit" disabled={busy || name.trim().length < 2 || !normalizeBrPhone(phone)}>
             {busy ? <><span className="spinner" /> Gerando Pix…</> : `Gerar Pix de ${price}`}
           </button>
           <p className="small muted">

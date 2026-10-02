@@ -32,6 +32,7 @@ export type PublicConfig = {
   meta_pixel_id: string | null;
   quiz_version: string;
   dev_tools: boolean;
+  whatsapp_auto: boolean;
 };
 
 let configPromise: Promise<PublicConfig> | undefined;

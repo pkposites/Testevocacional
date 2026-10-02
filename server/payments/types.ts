@@ -19,7 +19,7 @@ export type CreateCheckoutInput = {
   publicRef: string;
   attempt: number;
   amountCents: number;
-  buyerEmail: string;
+  buyerPhone: string;
   buyerName: string;
   description: string;
   attribution: Record<string, string>;

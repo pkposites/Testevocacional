@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatBrPhone } from '../../shared/phone';
 import { api, ApiFailure, brl } from '../api';
 
 const dt = (v?: string | null) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
@@ -15,6 +16,7 @@ export function Admin() {
   const [note, setNote] = useState('');
   const [forceManual, setForceManual] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [share, setShare] = useState<{ link: string; wa: string } | null>(null);
 
   async function load() {
     try {
@@ -28,7 +30,8 @@ export function Admin() {
   }
   useEffect(() => void load(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function open(id: string) {
+  async function open(id: string, keepShare = false) {
+    if (!keepShare) setShare(null);
     setDetail(await api('GET', `/api/admin/orders/${id}`));
     setMsg(null);
   }
@@ -37,8 +40,11 @@ export function Admin() {
     setMsg(null);
     try {
       const r = await api('POST', `/api/admin/orders/${detail.order.id}/${path}`, body);
-      setMsg(`OK: ${JSON.stringify(r.result?.code ?? r.results?.map((x: any) => x?.code) ?? r.ok)}`);
-      await open(detail.order.id);
+      if (r.wa_url) {
+        setShare({ link: r.link, wa: r.wa_url });
+        setMsg('Link de acesso gerado (uso único, 7 dias). Envie pelo seu WhatsApp:');
+      } else setMsg(`OK: ${JSON.stringify(r.result?.code ?? r.results?.map((x: any) => x?.code) ?? r.ok)}`);
+      await open(detail.order.id, true);
       await load();
     } catch (e) {
       setMsg((e as Error).message);
@@ -67,14 +73,23 @@ export function Admin() {
     <div className="wrap admin-wrap">
       <h1>Admin · pedidos</h1>
       {msg && <div className="status info">{msg}</div>}
-      {alerts && (alerts.flagged_payments.length + alerts.pending_emails.length + alerts.webhook_issues.length > 0) && (
+      {share && (
+        <div className="card soft">
+          <p className="small" style={{ wordBreak: 'break-all' }}>{share.link}</p>
+          <div className="row">
+            <a className="btn" href={share.wa} target="_blank" rel="noreferrer">Abrir no WhatsApp</a>
+            <button className="btn secondary" onClick={() => navigator.clipboard.writeText(share.link)}>Copiar link</button>
+          </div>
+        </div>
+      )}
+      {alerts && (alerts.flagged_payments.length + alerts.pending_messages.length + alerts.webhook_issues.length > 0) && (
         <div className="card" style={{ borderColor: 'var(--warn)' }}>
           <h3>Alertas</h3>
           {alerts.flagged_payments.map((p: any) => (
             <p key={p.id} className="small">Pagamento <code>{p.provider_resource_id}</code> · {p.normalized_status} · <strong>{p.flag}</strong> · {p.verified_amount_cents != null ? brl(p.verified_amount_cents) : '—'} {p.order_id && <button className="btn link" onClick={() => open(p.order_id)}>abrir pedido</button>}</p>
           ))}
-          {alerts.pending_emails.map((e: any) => (
-            <p key={e.id} className="small">E-mail {e.kind} {e.status} ({e.attempts}x) · {e.public_ref} · {e.last_error} {e.order_id && <button className="btn link" onClick={() => open(e.order_id)}>abrir</button>}</p>
+          {alerts.pending_messages.map((e: any) => (
+            <p key={e.id} className="small">WhatsApp {e.kind} {e.status} ({e.attempts}x) · {e.public_ref} · {e.last_error} {e.order_id && <button className="btn link" onClick={() => open(e.order_id)}>abrir</button>}</p>
           ))}
           {alerts.webhook_issues.map((w: any) => (
             <p key={w.event_key} className="small">Webhook {w.provider} · {w.resource_id ?? '—'} · assinatura {w.signature_valid ? 'ok' : 'INVÁLIDA'} · {w.result_code ?? 'não processado'} · {dt(w.received_at)}</p>
@@ -82,15 +97,15 @@ export function Admin() {
         </div>
       )}
       <form className="row" onSubmit={(e) => { e.preventDefault(); void load(); }}>
-        <input type="text" placeholder="E-mail, código MC-, ID do pedido ou do pagamento" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="text" placeholder="WhatsApp, código MC-, ID do pedido ou do pagamento" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn" style={{ flex: '0 0 120px' }}>Buscar</button>
       </form>
       <table className="admin" style={{ marginTop: 12 }}>
-        <thead><tr><th>Pedido</th><th>E-mail</th><th>Status</th><th>Criado</th><th>Pago</th></tr></thead>
+        <thead><tr><th>Pedido</th><th>WhatsApp</th><th>Status</th><th>Criado</th><th>Pago</th></tr></thead>
         <tbody>
           {orders.map((o) => (
             <tr key={o.id} onClick={() => open(o.id)} style={{ cursor: 'pointer' }}>
-              <td>{o.public_ref}</td><td>{o.buyer_email}</td><td>{o.status}</td><td>{dt(o.created_at)}</td><td>{dt(o.paid_at)}</td>
+              <td>{o.public_ref}</td><td>{formatBrPhone(o.buyer_phone)}</td><td>{o.status}</td><td>{dt(o.created_at)}</td><td>{dt(o.paid_at)}</td>
             </tr>
           ))}
         </tbody>
@@ -99,7 +114,7 @@ export function Admin() {
       {detail && (
         <div className="card" style={{ marginTop: 16 }}>
           <h2>{detail.order.public_ref} · {detail.order.status}</h2>
-          <p className="small">{detail.order.buyer_name} · {detail.order.buyer_email} · {brl(detail.order.amount_cents)} · {detail.order.provider} · UTM: {JSON.stringify(detail.order.utm)}</p>
+          <p className="small">{detail.order.buyer_name} · {formatBrPhone(detail.order.buyer_phone)} · {brl(detail.order.amount_cents)} · {detail.order.provider} · UTM: {JSON.stringify(detail.order.utm)}</p>
           <h3>Pagamentos</h3>
           <table className="admin"><tbody>
             {detail.payments.map((p: any) => (
@@ -107,15 +122,15 @@ export function Admin() {
             ))}
           </tbody></table>
           <p className="small">Acesso: {detail.entitlement ? `${detail.entitlement.state} · 1º acesso ${dt(detail.entitlement.first_access_at)}` : 'não liberado'}</p>
-          <h3>E-mails</h3>
-          {detail.emails.map((e: any) => <p key={e.id} className="small">{e.kind} · {e.status} · {e.attempts}x · {dt(e.sent_at)} {e.last_error ?? ''}</p>)}
+          <h3>Mensagens de acesso {detail.whatsapp_auto ? '(WhatsApp automático)' : '(envio manual)'}</h3>
+          {detail.messages.map((e: any) => <p key={e.id} className="small">{e.kind} · {e.status} · {e.attempts}x · {dt(e.sent_at)} {e.last_error ?? ''}</p>)}
           <h3>Auditoria</h3>
           {detail.audit.map((a: any, i: number) => <p key={i} className="small">{dt(a.created_at)} · {a.operator} · {a.action} · {a.payment_ref ?? ''} · {a.note ?? ''}</p>)}
 
           <div className="stack" style={{ marginTop: 12 }}>
             <div className="row">
               <button className="btn secondary" onClick={() => act('reconcile')}>Consultar provedor</button>
-              <button className="btn secondary" onClick={() => act('resend', { operator })} disabled={!detail.entitlement || detail.entitlement.state !== 'active'}>Reenviar acesso</button>
+              <button className="btn secondary" onClick={() => act('resend', { operator })} disabled={!detail.entitlement || detail.entitlement.state !== 'active'}>{detail.whatsapp_auto ? 'Reenviar acesso no WhatsApp' : 'Gerar link e enviar pelo meu WhatsApp'}</button>
             </div>
             <label htmlFor="op">Operador</label>
             <input id="op" type="text" value={operator} onChange={(e) => setOperator(e.target.value)} />

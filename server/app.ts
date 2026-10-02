@@ -2,13 +2,14 @@
 import { randomBytes } from 'node:crypto';
 import { CURRENT_AREA_MAX, DAILY_TIMES, MOMENTS, QUESTIONS, QUIZ_VERSION, isCompleteAnswers, isCompleteContext, type Answers, type QuizContext } from '../shared/quiz';
 import { one } from './db';
-import { accessEmail } from './email';
-import { ApiError, clientIp, cookie, errorResponse, hmacHex, json, newToken, normalizeEmail, parseCookies, readJson, requestId, safeEqual, sha256, type Ctx } from './http';
+import { ApiError, clientIp, cookie, errorResponse, hmacHex, json, newToken, normalizePhone, parseCookies, readJson, requestId, safeEqual, sha256, type Ctx } from './http';
 import { fakeStore } from './payments/fake';
 import { ProviderNetworkError, type ProviderPaymentState } from './payments/types';
 import { applyProviderState } from './reconcile';
 import { computeResult, type ResultSnapshot } from './scoring';
-import { afterApply, drainOutbox, issueAccessToken, rateLimit, reconcilePayment, type App } from './services';
+import { normalizeBrPhone } from '../shared/phone';
+import { accessLink, afterApply, drainOutbox, rateLimit, reconcilePayment, type App } from './services';
+import { accessText } from './whatsapp';
 
 const S_COOKIE = 'mc_s';
 const A_COOKIE = 'mc_a';
@@ -70,18 +71,18 @@ async function requireQuizSession(app: App, ctx: Ctx) {
   return s;
 }
 
-async function getAccessEmail(app: App, ctx: Ctx): Promise<string | undefined> {
+async function getAccessPhone(app: App, ctx: Ctx): Promise<string | undefined> {
   const tok = ctx.cookies[A_COOKIE];
   if (!tok) return undefined;
-  const row = await one(app.db, 'select buyer_email from access_sessions where token_hash = $1 and expires_at > now()', [sha256(tok)]);
-  return row?.buyer_email;
+  const row = await one(app.db, 'select buyer_phone from access_sessions where token_hash = $1 and expires_at > now()', [sha256(tok)]);
+  return row?.buyer_phone;
 }
 
-async function startAccessSession(app: App, ctx: Ctx, email: string) {
+async function startAccessSession(app: App, ctx: Ctx, phone: string) {
   const tok = newToken();
   await app.db.query(
-    `insert into access_sessions (token_hash, buyer_email, expires_at) values ($1,$2, now() + interval '${ACCESS_SESSION_DAYS} days')`,
-    [sha256(tok), email],
+    `insert into access_sessions (token_hash, buyer_phone, expires_at) values ($1,$2, now() + interval '${ACCESS_SESSION_DAYS} days')`,
+    [sha256(tok), phone],
   );
   ctx.setCookies.push(cookie(A_COOKIE, tok, { maxAgeSec: ACCESS_SESSION_DAYS * 86400, secure: secure(app) }));
 }
@@ -123,6 +124,7 @@ route('GET', '/api/config', async (app, ctx) =>
     meta_pixel_id: app.cfg.meta.pixelId ?? null,
     quiz_version: QUIZ_VERSION,
     dev_tools: app.cfg.paymentProvider === 'fake' && app.cfg.env !== 'production',
+    whatsapp_auto: app.messages.enabled,
   }),
 );
 
@@ -307,7 +309,7 @@ async function ensureCheckout(app: App, order: any, forceNew = false): Promise<v
       publicRef: order.public_ref,
       attempt: (attempts?.n ?? 0) + 1,
       amountCents: order.amount_cents,
-      buyerEmail: order.buyer_email,
+      buyerPhone: order.buyer_phone,
       buyerName: order.buyer_name,
       description: 'Mapa da Carreira — 5 caminhos e plano de 7 dias',
       attribution: order.attribution ?? {},
@@ -349,7 +351,7 @@ route('POST', '/api/orders', async (app, ctx) => {
   if (result.answer_revision !== s.answer_revision) throw new ApiError(409, 'stale_result', 'Suas respostas mudaram. Veja a prévia atualizada antes de comprar.');
   const name = String(body.buyer_name ?? '').trim().slice(0, 60);
   if (name.length < 2) throw new ApiError(400, 'invalid_name', 'Informe seu primeiro nome.');
-  const email = normalizeEmail(body.buyer_email);
+  const phone = normalizePhone(body.buyer_phone);
   const idemKey = ctx.req.headers.get('idempotency-key')?.slice(0, 100) || null;
 
   // Pedido pago para este resultado: não recriar.
@@ -357,9 +359,9 @@ route('POST', '/api/orders', async (app, ctx) => {
   if (!order && idemKey) order = await one(app.db, 'select * from orders where idempotency_key = $1 and session_id = $2', [idemKey, s.id]);
   if (!order) {
     order = await one(app.db, `select * from orders where result_id = $1 and status in ('created','pending','expired','cancelled') order by created_at desc limit 1`, [resultId]);
-    if (order && (order.buyer_email !== email || order.buyer_name !== name)) {
-      order = await one(app.db, `update orders set buyer_email = $2, buyer_name = $3, marketing_opt_in = $4, updated_at = now() where id = $1 returning *`,
-        [order.id, email, name, !!body.marketing_opt_in]);
+    if (order && (order.buyer_phone !== phone || order.buyer_name !== name)) {
+      order = await one(app.db, `update orders set buyer_phone = $2, buyer_name = $3, marketing_opt_in = $4, updated_at = now() where id = $1 returning *`,
+        [order.id, phone, name, !!body.marketing_opt_in]);
     }
   }
   if (!order) {
@@ -373,10 +375,10 @@ route('POST', '/api/orders', async (app, ctx) => {
     };
     order = await one(
       app.db,
-      `insert into orders (public_ref, result_id, session_id, provider, amount_cents, currency, buyer_name, buyer_email, marketing_opt_in, idempotency_key, attribution)
+      `insert into orders (public_ref, result_id, session_id, provider, amount_cents, currency, buyer_name, buyer_phone, marketing_opt_in, idempotency_key, attribution)
        values ($1,$2,$3,$4,$5,'BRL',$6,$7,$8,$9,$10::jsonb)
        on conflict (idempotency_key) do update set updated_at = now() returning *`,
-      [publicRef(), resultId, s.id, app.cfg.paymentProvider, app.cfg.priceCents, name, email, !!body.marketing_opt_in, idemKey, JSON.stringify(attribution)],
+      [publicRef(), resultId, s.id, app.cfg.paymentProvider, app.cfg.priceCents, name, phone, !!body.marketing_opt_in, idemKey, JSON.stringify(attribution)],
     );
   }
   await ensureCheckout(app, order);
@@ -392,8 +394,8 @@ async function authorizeOrder(app: App, ctx: Ctx): Promise<{ order: any; viaSess
   if (!order) throw new ApiError(404, 'order_not_found', 'Pedido não encontrado.');
   const s = await getQuizSession(app, ctx);
   if (s && s.id === order.session_id) return { order, viaSession: true };
-  const email = await getAccessEmail(app, ctx);
-  if (email && email === order.buyer_email) return { order, viaSession: false };
+  const phone = await getAccessPhone(app, ctx);
+  if (phone && phone === order.buyer_phone) return { order, viaSession: false };
   throw new ApiError(404, 'order_not_found', 'Pedido não encontrado.');
 }
 
@@ -410,7 +412,7 @@ route('GET', '/api/orders/:id/status', async (app, ctx) => {
     }
   }
   // Pagamento confirmado na aba de origem: abre sessão de acesso para retornos futuros.
-  if (order.status === 'paid' && viaSession && !(await getAccessEmail(app, ctx))) await startAccessSession(app, ctx, order.buyer_email);
+  if (order.status === 'paid' && viaSession && !(await getAccessPhone(app, ctx))) await startAccessSession(app, ctx, order.buyer_phone);
   return json(ctx, 200, await orderView(app, order));
 });
 
@@ -475,24 +477,37 @@ route('POST', '/api/webhooks/:provider', async (app, ctx) => {
 // ---------- acesso ----------
 
 route('POST', '/api/access/recover', async (app, ctx) => {
-  await limit(app, ctx, 'recover', 5, 900);
+  await limit(app, ctx, 'recover', 8, 900);
   const body = await readJson(ctx);
-  const email = normalizeEmail(body.email);
-  const perEmail = await rateLimit(app.db, `recover-email:${sha256(email)}`, 3, 3600);
-  if (perEmail) {
-    const ent = await one(app.db, `select e.id, o.buyer_name from entitlements e join orders o on o.id = e.order_id where e.buyer_email = $1 and e.state = 'active' limit 1`, [email]);
-    if (ent) {
-      const token = await issueAccessToken(app.db, email, 'recover', RECOVER_TTL_MIN);
-      const link = `${app.cfg.publicBaseUrl}/acesso?t=${encodeURIComponent(token)}`;
-      try {
-        await app.sendEmail({ to: email, ...accessEmail({ name: ent.buyer_name, link, kind: 'recover', support: app.cfg.supportContact, ttlText: `${RECOVER_TTL_MIN} minutos` }) });
-      } catch (e) {
-        console.error('Envio de recuperação falhou', (e as Error).message);
-      }
+  const phone = normalizePhone(body.phone);
+  if (!(await rateLimit(app.db, `recover-phone:${sha256(phone)}`, 6, 3600))) {
+    throw new ApiError(429, 'rate_limited', 'Muitas tentativas para este número. Aguarde um pouco ou fale com o suporte.');
+  }
+  const rawRef = String(body.order_ref ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (rawRef) {
+    // WhatsApp + código do pedido: abre o acesso direto, sem depender de mensagem.
+    const ref = `MC-${rawRef.replace(/^MC/, '')}`;
+    const ent = await one(
+      app.db,
+      `select e.id from entitlements e join orders o on o.id = e.order_id where e.buyer_phone = $1 and o.public_ref = $2 and e.state = 'active'`,
+      [phone, ref],
+    );
+    if (!ent) throw new ApiError(404, 'not_found', 'Não encontramos uma compra com esse WhatsApp e código. Confira os dados ou fale com o suporte.');
+    await startAccessSession(app, ctx, phone);
+    return json(ctx, 200, { ok: true, maps: await listMaps(app, phone) });
+  }
+  if (!app.messages.enabled) throw new ApiError(400, 'code_required', 'Informe também o código do pedido (começa com MC-).');
+  const ent = await one(app.db, `select o.buyer_name from entitlements e join orders o on o.id = e.order_id where e.buyer_phone = $1 and e.state = 'active' limit 1`, [phone]);
+  if (ent) {
+    try {
+      const link = await accessLink(app, phone, 'recover', RECOVER_TTL_MIN);
+      await app.messages.send({ to: phone, name: String(ent.buyer_name).split(' ')[0], link, kind: 'recover' });
+    } catch (e) {
+      console.error('Envio de recuperação falhou', (e as Error).message);
     }
   }
-  // Resposta genérica: não revela se o e-mail tem compra.
-  return json(ctx, 200, { ok: true, message: 'Se houver uma compra com este e-mail, enviaremos um link de acesso em instantes.' });
+  // Resposta genérica: não revela se o número tem compra.
+  return json(ctx, 200, { ok: true, message: 'Se houver uma compra com este WhatsApp, enviaremos o link de acesso em instantes.' });
 });
 
 route('POST', '/api/access/exchange', async (app, ctx) => {
@@ -502,27 +517,27 @@ route('POST', '/api/access/exchange', async (app, ctx) => {
   if (!token) throw new ApiError(400, 'invalid_token', 'Link inválido.');
   const row = await one(
     app.db,
-    `update access_tokens set used_at = now() where token_hash = $1 and used_at is null and expires_at > now() returning buyer_email`,
+    `update access_tokens set used_at = now() where token_hash = $1 and used_at is null and expires_at > now() returning buyer_phone`,
     [sha256(token)],
   );
   if (!row) throw new ApiError(410, 'token_expired', 'Este link expirou ou já foi usado. Peça um novo link de acesso.');
-  await startAccessSession(app, ctx, row.buyer_email);
-  return json(ctx, 200, { ok: true, maps: await listMaps(app, row.buyer_email) });
+  await startAccessSession(app, ctx, row.buyer_phone);
+  return json(ctx, 200, { ok: true, maps: await listMaps(app, row.buyer_phone) });
 });
 
-async function listMaps(app: App, email: string) {
+async function listMaps(app: App, phone: string) {
   const rows = await app.db.query(
     `select e.result_id, o.public_ref, o.paid_at from entitlements e join orders o on o.id = e.order_id
-     where e.buyer_email = $1 and e.state = 'active' order by o.paid_at desc`,
-    [email],
+     where e.buyer_phone = $1 and e.state = 'active' order by o.paid_at desc`,
+    [phone],
   );
   return rows.map((r) => ({ result_id: r.result_id, public_ref: r.public_ref, paid_at: r.paid_at }));
 }
 
 route('GET', '/api/access/me', async (app, ctx) => {
-  const email = await getAccessEmail(app, ctx);
-  if (!email) throw new ApiError(401, 'no_access', 'Acesso não encontrado.');
-  return json(ctx, 200, { maps: await listMaps(app, email) });
+  const phone = await getAccessPhone(app, ctx);
+  if (!phone) throw new ApiError(401, 'no_access', 'Acesso não encontrado.');
+  return json(ctx, 200, { maps: await listMaps(app, phone) });
 });
 
 route('POST', '/api/access/logout', async (app, ctx) => {
@@ -544,8 +559,8 @@ async function authorizeResult(app: App, ctx: Ctx, resultId: string) {
   );
   if (!ent) throw new ApiError(403, 'forbidden', 'Acesso não liberado para este mapa.');
   const s = await getQuizSession(app, ctx);
-  const email = await getAccessEmail(app, ctx);
-  const ok = (s && s.id === ent.session_id) || (email && email === ent.buyer_email);
+  const phone = await getAccessPhone(app, ctx);
+  const ok = (s && s.id === ent.session_id) || (phone && phone === ent.buyer_phone);
   if (!ok) throw new ApiError(403, 'forbidden', 'Acesso não liberado para este mapa.');
   return ent;
 }
@@ -675,11 +690,12 @@ route('POST', '/api/admin/logout', async (app, ctx) => {
 
 route('GET', '/api/admin/orders', async (app, ctx) => {
   requireAdmin(app, ctx);
-  const q = (ctx.url.searchParams.get('q') ?? '').trim().toLowerCase();
+  const raw = (ctx.url.searchParams.get('q') ?? '').trim();
+  const q = normalizeBrPhone(raw) ?? raw.toLowerCase();
   const rows = await app.db.query(
-    `select o.id, o.public_ref, o.buyer_email, o.status, o.amount_cents, o.provider, o.created_at, o.paid_at
+    `select o.id, o.public_ref, o.buyer_phone, o.status, o.amount_cents, o.provider, o.created_at, o.paid_at
      from orders o
-     where $1 = '' or lower(o.buyer_email) = $1 or lower(o.public_ref) = $1 or o.id::text = $1
+     where $1 = '' or o.buyer_phone = $1 or lower(o.public_ref) = $1 or o.id::text = $1
         or exists (select 1 from payments p where p.order_id = o.id and (lower(p.provider_resource_id) = $1 or lower(coalesce(p.provider_payment_id,'')) = $1))
      order by o.created_at desc limit 50`,
     [q],
@@ -690,9 +706,11 @@ route('GET', '/api/admin/orders', async (app, ctx) => {
 route('GET', '/api/admin/alerts', async (app, ctx) => {
   requireAdmin(app, ctx);
   const flagged = await app.db.query(`select id, order_id, provider, provider_resource_id, normalized_status, flag, verified_amount_cents, updated_at from payments where flag is not null order by updated_at desc limit 50`);
-  const emails = await app.db.query(`select e.id, e.order_id, o.public_ref, e.kind, e.status, e.attempts, e.last_error, e.created_at from email_outbox e left join orders o on o.id = e.order_id where e.status <> 'sent' order by e.created_at desc limit 50`);
+  const messages = app.messages.enabled
+    ? await app.db.query(`select m.id, m.order_id, o.public_ref, m.kind, m.status, m.attempts, m.last_error, m.created_at from message_outbox m left join orders o on o.id = m.order_id where m.status <> 'sent' order by m.created_at desc limit 50`)
+    : [];
   const webhooks = await app.db.query(`select provider, event_key, resource_id, signature_valid, result_code, received_at from webhook_events where signature_valid = false or result_code in ('fetch_failed','orphan','review','duplicate') or processed_at is null order by received_at desc limit 50`);
-  return json(ctx, 200, { flagged_payments: flagged, pending_emails: emails, webhook_issues: webhooks });
+  return json(ctx, 200, { flagged_payments: flagged, pending_messages: messages, webhook_issues: webhooks });
 });
 
 route('GET', '/api/admin/orders/:id', async (app, ctx) => {
@@ -704,9 +722,9 @@ route('GET', '/api/admin/orders/:id', async (app, ctx) => {
   const { attribution, ...safeOrder } = order;
   const payments = await app.db.query(`select id, provider, provider_resource_id, provider_payment_id, normalized_status, raw_status, verified_amount_cents, currency, flag, expires_at, verified_at, created_at from payments where order_id = $1 order by created_at`, [id]);
   const entitlement = await one(app.db, 'select id, state, created_at, revoked_at, first_access_at from entitlements where order_id = $1', [id]);
-  const emails = await app.db.query('select id, kind, status, attempts, last_error, created_at, sent_at from email_outbox where order_id = $1 order by created_at', [id]);
+  const messages = await app.db.query('select id, kind, status, attempts, last_error, created_at, sent_at from message_outbox where order_id = $1 order by created_at', [id]);
   const audit = await app.db.query('select operator, action, payment_ref, note, created_at from admin_audit where order_id = $1 order by created_at', [id]);
-  return json(ctx, 200, { order: { ...safeOrder, utm: cleanAttribution(attribution) }, payments, entitlement, emails, audit });
+  return json(ctx, 200, { order: { ...safeOrder, utm: cleanAttribution(attribution) }, payments, entitlement, messages, audit, whatsapp_auto: app.messages.enabled });
 });
 
 async function adminOrder(app: App, ctx: Ctx) {
@@ -730,10 +748,16 @@ route('POST', '/api/admin/orders/:id/resend', async (app, ctx) => {
   const body = await readJson(ctx);
   const ent = await one(app.db, `select id from entitlements where order_id = $1 and state = 'active'`, [order.id]);
   if (!ent) throw new ApiError(409, 'not_paid', 'Pedido sem acesso ativo.');
-  await app.db.query(`insert into email_outbox (order_id, kind, to_email) values ($1,'resend',$2)`, [order.id, order.buyer_email]);
   await app.db.query(`insert into admin_audit (operator, action, order_id, note) values ($1,'resend',$2,$3)`, [String(body.operator ?? 'admin').slice(0, 60), order.id, null]);
-  await drainOutbox(app, order.id);
-  return json(ctx, 200, { ok: true });
+  if (app.messages.enabled) {
+    await app.db.query(`insert into message_outbox (order_id, kind, to_phone) values ($1,'resend',$2)`, [order.id, order.buyer_phone]);
+    await drainOutbox(app, order.id);
+    return json(ctx, 200, { ok: true, sent: true });
+  }
+  // Sem API: devolve o link e um atalho para enviar pelo WhatsApp do operador.
+  const link = await accessLink(app, order.buyer_phone, 'purchase');
+  const text = accessText({ name: String(order.buyer_name).split(' ')[0], link, kind: 'purchase' }, app.cfg.supportContact);
+  return json(ctx, 200, { ok: true, sent: false, link, wa_url: `https://wa.me/${order.buyer_phone}?text=${encodeURIComponent(text)}` });
 });
 
 route('POST', '/api/admin/orders/:id/manual-release', async (app, ctx) => {

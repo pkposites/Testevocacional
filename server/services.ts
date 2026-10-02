@@ -1,6 +1,6 @@
 import type { AppConfig } from './config';
 import { one, type Db } from './db';
-import { accessEmail, type EmailSender } from './email';
+import type { MessageSender } from './whatsapp';
 import { newToken, sha256 } from './http';
 import type { PaymentProvider } from './payments/types';
 import { applyProviderState, type ApplyResult } from './reconcile';
@@ -9,7 +9,7 @@ export type App = {
   db: Db;
   cfg: AppConfig;
   provider: PaymentProvider;
-  sendEmail: EmailSender;
+  messages: MessageSender;
   fetchImpl: typeof fetch;
 };
 
@@ -27,45 +27,43 @@ export async function rateLimit(db: Db, key: string, limit: number, windowSec: n
   return (row?.count ?? 0) <= limit;
 }
 
-export async function issueAccessToken(db: Db, email: string, purpose: 'purchase' | 'recover', ttlMinutes: number): Promise<string> {
+export async function issueAccessToken(db: Db, phone: string, purpose: 'purchase' | 'recover', ttlMinutes: number): Promise<string> {
   const token = newToken();
   await db.query(
-    `insert into access_tokens (token_hash, buyer_email, purpose, expires_at) values ($1,$2,$3, now() + ($4 || ' minutes')::interval)`,
-    [sha256(token), email, purpose, String(ttlMinutes)],
+    `insert into access_tokens (token_hash, buyer_phone, purpose, expires_at) values ($1,$2,$3, now() + ($4 || ' minutes')::interval)`,
+    [sha256(token), phone, purpose, String(ttlMinutes)],
   );
   return token;
 }
 
-function ttlText(minutes: number) {
-  if (minutes < 120) return `${minutes} minutos`;
-  const h = Math.round(minutes / 60);
-  return h % 24 === 0 ? `${h / 24} dias` : `${h} horas`;
+/** Link de acesso de uso único para o comprador. */
+export async function accessLink(app: App, phone: string, purpose: 'purchase' | 'recover', ttlMinutes = app.cfg.purchaseLinkTtlHours * 60) {
+  const token = await issueAccessToken(app.db, phone, purpose, ttlMinutes);
+  return `${app.cfg.publicBaseUrl}/acesso?t=${encodeURIComponent(token)}`;
 }
 
-/** Envia e-mails pendentes (de um pedido ou todos). Falha não desfaz a compra: fica registrada para reenvio. */
+/** Envia mensagens pendentes (de um pedido ou todas). Falha não desfaz a compra: fica registrada para reenvio. */
 export async function drainOutbox(app: App, orderId?: string): Promise<void> {
+  if (!app.messages.enabled) return; // sem API de WhatsApp: o admin envia pelo próprio WhatsApp
   const rows = await app.db.query(
-    `select e.*, o.buyer_name from email_outbox e left join orders o on o.id = e.order_id
-     where e.status in ('pending','failed') and e.attempts < 5 ${orderId ? 'and e.order_id = $1' : ''} order by e.created_at limit 20`,
+    `select m.*, o.buyer_name from message_outbox m left join orders o on o.id = m.order_id
+     where m.status in ('pending','failed') and m.attempts < 5 ${orderId ? 'and m.order_id = $1' : ''} order by m.created_at limit 20`,
     orderId ? [orderId] : [],
   );
   for (const r of rows) {
-    const claimed = await one(app.db, `update email_outbox set attempts = attempts + 1 where id = $1 and status <> 'sent' and attempts = $2 returning id`, [r.id, r.attempts]);
+    const claimed = await one(app.db, `update message_outbox set attempts = attempts + 1 where id = $1 and status <> 'sent' and attempts = $2 returning id`, [r.id, r.attempts]);
     if (!claimed) continue;
     try {
-      const minutes = app.cfg.purchaseLinkTtlHours * 60;
-      const token = await issueAccessToken(app.db, r.to_email, 'purchase', minutes);
-      const link = `${app.cfg.publicBaseUrl}/acesso?t=${encodeURIComponent(token)}`;
-      const msg = accessEmail({ name: r.buyer_name, link, kind: 'purchase', support: app.cfg.supportContact, ttlText: ttlText(minutes) });
-      await app.sendEmail({ to: r.to_email, ...msg });
-      await app.db.query(`update email_outbox set status = 'sent', sent_at = now(), last_error = null where id = $1`, [r.id]);
+      const link = await accessLink(app, r.to_phone, 'purchase');
+      await app.messages.send({ to: r.to_phone, name: String(r.buyer_name ?? '').split(' ')[0], link, kind: 'purchase' });
+      await app.db.query(`update message_outbox set status = 'sent', sent_at = now(), last_error = null where id = $1`, [r.id]);
     } catch (e) {
-      await app.db.query(`update email_outbox set status = 'failed', last_error = $2 where id = $1`, [r.id, String((e as Error).message).slice(0, 300)]);
+      await app.db.query(`update message_outbox set status = 'failed', last_error = $2 where id = $1`, [r.id, String((e as Error).message).slice(0, 300)]);
     }
   }
 }
 
-/** Purchase via API de Conversões (opcional). Sem e-mail, nome ou respostas: só IP/UA/fbp/fbc. */
+/** Purchase via API de Conversões (opcional). Sem telefone, nome ou respostas: só IP/UA/fbp/fbc. */
 export async function sendMetaPurchase(app: App, orderId: string): Promise<void> {
   const { pixelId, capiToken, testEventCode } = app.cfg.meta;
   if (!pixelId || !capiToken) return;

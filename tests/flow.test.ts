@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sentEmails } from '../server/email';
+import { sentMessages } from '../server/whatsapp';
 import { fakeStore } from '../server/payments/fake';
 import type { App } from '../server/services';
 import { analyticAnswers, Client, fakeWebhook, lastResourceId, makeApp, reachPix } from './helpers';
@@ -72,8 +72,9 @@ describe('pagamento e liberação', () => {
 
     expect(await count(`select count(*) n from entitlements where order_id = $1`, [order.order_id])).toBe(1);
     expect(await count(`select count(*) n from events where name = 'Purchase' and order_id = $1`, [order.order_id])).toBe(1);
-    expect(await count(`select count(*) n from email_outbox where order_id = $1 and status = 'sent'`, [order.order_id])).toBe(1);
-    expect(sentEmails).toHaveLength(1);
+    expect(await count(`select count(*) n from message_outbox where order_id = $1 and status = 'sent'`, [order.order_id])).toBe(1);
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0].to).toBe('5511987654321');
 
     const st = await c.req('GET', `/api/orders/${order.order_id}/status`);
     expect(st.body.status).toBe('paid');
@@ -85,7 +86,7 @@ describe('pagamento e liberação', () => {
     expect(full.body.buyer_first_name).toBe('Ana');
 
     // Recarregar e reenviar o pedido não recria nem cobra de novo.
-    const again = await c.req('POST', '/api/orders', { result_id: resultId, buyer_name: 'Ana', buyer_email: 'ana@example.com' });
+    const again = await c.req('POST', '/api/orders', { result_id: resultId, buyer_name: 'Ana', buyer_phone: '11987654321' });
     expect(again.body.order_id).toBe(order.order_id);
     expect(again.body.status).toBe('paid');
     expect(await count('select count(*) n from orders')).toBe(1);
@@ -185,18 +186,18 @@ describe('pagamento e liberação', () => {
     expect(await count(`select count(*) n from payments where flag = 'duplicate'`)).toBe(1);
   });
 
-  it('falha no e-mail não desfaz a compra e permite reenvio pelo admin', async () => {
+  it('falha no WhatsApp não desfaz a compra e permite reenvio pelo admin', async () => {
     let fail = true;
-    app.sendEmail = async () => {
-      if (fail) throw new Error('smtp down');
-    };
+    app.messages = { enabled: true, send: async () => {
+      if (fail) throw new Error('whatsapp down');
+    } };
     const c = new Client(app);
     const { resultId, order } = await reachPix(c);
     const rid = await lastResourceId(app, order.order_id);
     fakeStore.setStatus(rid, 'paid');
     await fakeWebhook(app, rid);
     expect((await c.req('GET', `/api/results/${resultId}/full`)).status).toBe(200);
-    expect(await count(`select count(*) n from email_outbox where status = 'failed'`)).toBe(1);
+    expect(await count(`select count(*) n from message_outbox where status = 'failed'`)).toBe(1);
 
     fail = false;
     const adm = new Client(app);
@@ -204,20 +205,20 @@ describe('pagamento e liberação', () => {
     expect((await adm.req('GET', '/api/admin/alerts')).status).toBe(401);
     await adm.req('POST', '/api/admin/login', { password: 'adm' });
     const alerts = await adm.req('GET', '/api/admin/alerts');
-    expect(alerts.body.pending_emails).toHaveLength(1);
+    expect(alerts.body.pending_messages).toHaveLength(1);
     expect((await adm.req('POST', `/api/admin/orders/${order.order_id}/resend`, { operator: 'robson' })).status).toBe(200);
-    expect(await count(`select count(*) n from email_outbox where status = 'sent'`)).toBe(2);
+    expect(await count(`select count(*) n from message_outbox where status = 'sent'`)).toBe(2);
   });
 });
 
 describe('recuperação de acesso', () => {
-  it('aba fechada: link do e-mail abre o mapa em outro navegador; token é de uso único', async () => {
+  it('aba fechada: link do WhatsApp abre o mapa em outro navegador; token é de uso único', async () => {
     const c = new Client(app);
     const { resultId, order } = await reachPix(c);
     const rid = await lastResourceId(app, order.order_id);
     fakeStore.setStatus(rid, 'paid');
     await fakeWebhook(app, rid);
-    const token = new URL(/https?:\/\/\S+/.exec(sentEmails[0].text)![0]).searchParams.get('t')!;
+    const token = new URL(sentMessages[0].link).searchParams.get('t')!;
 
     const outro = new Client(app);
     const ex = await outro.req('POST', '/api/access/exchange', { token });
@@ -227,17 +228,59 @@ describe('recuperação de acesso', () => {
     expect((await new Client(app).req('POST', '/api/access/exchange', { token })).status).toBe(410);
   });
 
-  it('recuperação responde igual com ou sem compra e só envia para compradores', async () => {
+  it('com envio automático: recuperação responde igual com ou sem compra e só envia para compradores', async () => {
     const c = new Client(app);
-    const { order } = await reachPix(c, 'bia@example.com');
+    const { order } = await reachPix(c, '21 99876-5432');
     const rid = await lastResourceId(app, order.order_id);
     fakeStore.setStatus(rid, 'paid');
     await fakeWebhook(app, rid);
-    sentEmails.length = 0;
-    const a = await new Client(app).req('POST', '/api/access/recover', { email: 'BIA@example.com' });
-    const b = await new Client(app).req('POST', '/api/access/recover', { email: 'ninguem@example.com' });
+    sentMessages.length = 0;
+    const a = await new Client(app).req('POST', '/api/access/recover', { phone: '+55 (21) 99876-5432' });
+    const b = await new Client(app).req('POST', '/api/access/recover', { phone: '(31) 99999-0000' });
     expect(a.body).toEqual(b.body);
-    expect(sentEmails.map((m) => m.to)).toEqual(['bia@example.com']);
+    expect(sentMessages.map((m) => m.to)).toEqual(['5521998765432']);
+    expect((await new Client(app).req('POST', '/api/access/recover', { phone: '1234' })).body.code).toBe('invalid_phone');
+  });
+
+  it('sem API de WhatsApp: recuperação com WhatsApp + código e envio manual pelo admin', async () => {
+    app = await makeApp({ WHATSAPP_PROVIDER: 'none' });
+    const c = new Client(app);
+    const { resultId, order } = await reachPix(c);
+    const rid = await lastResourceId(app, order.order_id);
+    fakeStore.setStatus(rid, 'paid');
+    await fakeWebhook(app, rid);
+    expect(sentMessages).toHaveLength(0);
+    // A aba da compra continua com acesso.
+    expect((await c.req('GET', `/api/results/${resultId}/full`)).status).toBe(200);
+
+    const outro = new Client(app);
+    expect((await outro.req('POST', '/api/access/recover', { phone: '11987654321' })).body.code).toBe('code_required');
+    expect((await outro.req('POST', '/api/access/recover', { phone: '11987654321', order_ref: 'MC-ERRADO' })).status).toBe(404);
+    expect((await outro.req('POST', '/api/access/recover', { phone: '11912345678', order_ref: order.public_ref })).status).toBe(404);
+    const ok = await outro.req('POST', '/api/access/recover', { phone: '(11) 98765-4321', order_ref: order.public_ref.replace('MC-', '').toLowerCase() });
+    expect(ok.status).toBe(200);
+    expect(ok.body.maps[0].result_id).toBe(resultId);
+    expect((await outro.req('GET', `/api/results/${resultId}/full`)).status).toBe(200);
+
+    const adm = new Client(app);
+    await adm.req('POST', '/api/admin/login', { password: 'adm' });
+    const r = await adm.req('POST', `/api/admin/orders/${order.order_id}/resend`, { operator: 'robson' });
+    expect(r.body.sent).toBe(false);
+    expect(r.body.wa_url).toMatch(/^https:\/\/wa\.me\/5511987654321\?text=/);
+    const terceiro = new Client(app);
+    expect((await terceiro.req('POST', '/api/access/exchange', { token: new URL(r.body.link).searchParams.get('t') })).status).toBe(200);
+    expect((await adm.req('GET', '/api/admin/orders?q=(11) 98765-4321')).body.orders).toHaveLength(1);
+  });
+
+  it('pedido exige WhatsApp brasileiro válido', async () => {
+    const c = new Client(app);
+    await c.req('POST', '/api/quiz/sessions', {});
+    await c.req('PUT', '/api/quiz/sessions/me', { answers: analyticAnswers(), context: { moment: 'first', dailyTime: 15 } });
+    const r = await c.req('POST', '/api/results');
+    for (const bad of ['', '1198765432', '(11) 3333-4444', '(00) 98765-4321', 'ana@example.com']) {
+      const o = await c.req('POST', '/api/orders', { result_id: r.body.result_id, buyer_name: 'Ana', buyer_phone: bad });
+      expect(o.body.code).toBe('invalid_phone');
+    }
   });
 
   it('progresso, escolha e reflexão são salvos e validados', async () => {

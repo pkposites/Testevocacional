@@ -131,7 +131,7 @@ export function Payment() {
           <>
             <div className="status error" role="alert">{error}</div>
             <button className="btn" onClick={() => void refresh()}>Tentar de novo</button>
-            <p className="small" style={{ marginTop: 12 }}>Já pagou? <Link to="/acesso">Recupere o acesso pelo e-mail</Link>.</p>
+            <p className="small" style={{ marginTop: 12 }}>Já pagou? <Link to="/acesso">Abra o acesso com seu WhatsApp e o código do pedido</Link>.</p>
           </>
         ) : <div className="spinner dark" aria-label="Carregando" />}
       </div>
@@ -143,7 +143,7 @@ export function Payment() {
       <div className="wrap">
         <div className="status ok" role="status">Pagamento confirmado! Abrindo seu mapa…</div>
         <Link className="btn" to={`/mapa/${o.result_id}`}>Abrir meu mapa</Link>
-        <p className="small muted" style={{ marginTop: 12 }}>Também enviamos o link de acesso para o seu e-mail.</p>
+        <p className="small muted" style={{ marginTop: 12 }}>Seu código é <strong>{o.public_ref}</strong>. Com ele e seu WhatsApp, você abre o mapa em qualquer aparelho.</p>
       </div>
     );
   }
@@ -191,6 +191,11 @@ export function Payment() {
       <div className="status info" role="status">
         <span className="spinner dark" aria-hidden="true" /> Estamos aguardando a confirmação do Pix
       </div>
+      <div className="order-code">
+        <span className="small">Seu código do pedido</span>
+        <strong>{o.public_ref}</strong>
+        <span className="small">Anote ou tire um print: com ele e seu WhatsApp você abre o mapa depois.</span>
+      </div>
       <div className="card" style={{ textAlign: 'center' }}>
         <div className="price">{brl(o.amount_cents)}</div>
         <p className="small muted">Pagamento único · sem assinatura</p>
@@ -213,11 +218,15 @@ export function Payment() {
           <li>Cole o código, confira o valor de {brl(o.amount_cents)} e confirme.</li>
           <li>Volte para esta página: a liberação acontece assim que o banco confirmar.</li>
         </ol>
-        <p className="small muted">Pode fechar esta aba: com o pagamento confirmado, você recebe o link de acesso por e-mail.</p>
+        <p className="small muted">
+          {cfg?.whatsapp_auto
+            ? 'Pode fechar esta aba: com o pagamento confirmado, você recebe o link de acesso no WhatsApp.'
+            : 'Se fechar esta aba, abra o mapa depois em “Recuperar acesso” com seu WhatsApp e o código do pedido.'}
+        </p>
       </div>
       {error && <div className="status warn" role="alert">{error}</div>}
       {!polling && (
-        <div className="status info">Ainda não recebemos a confirmação. Se você já pagou, toque em verificar. O acesso também fica recuperável pelo seu e-mail.</div>
+        <div className="status info">Ainda não recebemos a confirmação. Se você já pagou, toque em verificar. Você também pode abrir o mapa depois com seu WhatsApp e o código do pedido.</div>
       )}
       <button className="btn secondary" onClick={check} disabled={checking}>{checking ? 'Verificando…' : 'Verificar pagamento'}</button>
       {cfg?.dev_tools && (

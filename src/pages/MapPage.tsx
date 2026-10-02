@@ -96,7 +96,7 @@ export function MapPage() {
     return (
       <div className="wrap">
         <h1>{error.status === 403 ? 'Acesso não liberado neste aparelho' : 'Não foi possível abrir o mapa'}</h1>
-        <p>{error.status === 403 ? 'Se você já comprou, receba um link de acesso no e-mail usado na compra.' : error.message}</p>
+        <p>{error.status === 403 ? 'Se você já comprou, abra o acesso com o WhatsApp e o código do pedido (MC-…).' : error.message}</p>
         <Link className="btn" to="/acesso">Recuperar meu acesso</Link>
         <p className="small" style={{ marginTop: 12 }}><Link to="/ajuda">Preciso de ajuda</Link></p>
       </div>
@@ -223,7 +223,7 @@ export function MapPage() {
 
       <button className="btn secondary no-print" onClick={printMap}>Salvar ou imprimir</button>
       <p className="small muted" style={{ marginTop: 12 }}>
-        Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com o e-mail da compra.
+        Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>.
       </p>
     </div>
   );

@@ -1,3 +1,4 @@
+import { normalizeBrPhone } from '../shared/phone';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 export class ApiError extends Error {
@@ -100,9 +101,8 @@ export function clientIp(req: Request): string {
   );
 }
 
-const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
-export function normalizeEmail(v: unknown): string {
-  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
-  if (!EMAIL_RE.test(s) || s.length > 254) throw new ApiError(400, 'invalid_email', 'Informe um e-mail válido.');
-  return s;
+export function normalizePhone(v: unknown): string {
+  const p = normalizeBrPhone(typeof v === 'string' ? v : '');
+  if (!p) throw new ApiError(400, 'invalid_phone', 'Informe um WhatsApp válido com DDD, por exemplo (11) 98765-4321.');
+  return p;
 }

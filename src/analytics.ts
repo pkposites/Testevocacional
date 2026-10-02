@@ -1,4 +1,4 @@
-// Medição: só carrega o Pixel após consentimento. Nunca envia respostas, nome, e-mail ou profissão.
+// Medição: só carrega o Pixel após consentimento. Nunca envia respostas, nome, telefone ou profissão.
 import { api, getConfig, storage } from './api';
 
 type Consent = 'granted' | 'denied' | 'unknown';

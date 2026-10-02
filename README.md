@@ -11,7 +11,8 @@ Implementa a especificação v1.0 (1/out/2026). Liberação **automática**: só
 - **Frontend**: React + Vite (`src/`), mobile first. Recebe só a prévia antes da compra.
 - **API**: uma Netlify Function (`netlify/functions/api.ts`) servindo `/api/*` (`server/app.ts`).
 - **Banco**: Postgres no Supabase, com conexão direta (`postgres.js`). RLS ligado sem policies: a chave pública não lê nada.
-- **E-mail**: Resend.
+- **Contato do comprador**: nome + WhatsApp (sem e-mail). Acesso: aba da compra, recuperação com WhatsApp +
+  código do pedido (MC-XXXXXX) e envio do link pelo admin. Envio automático opcional pela WhatsApp Cloud API.
 - **Conteúdo**: `shared/quiz.ts` (público) e `server/content/careers.v1.ts` (pago, somente servidor).
 
 ## Rodar localmente
@@ -19,7 +20,7 @@ Implementa a especificação v1.0 (1/out/2026). Liberação **automática**: só
 ```bash
 npm install
 npm run dev        # API em :8788 (PGlite + provedor fake) e site em :5173
-npm test           # 32 testes: cálculo, Mercado Pago, fluxo de pagamento e falhas
+npm test           # 39 testes: cálculo, Mercado Pago, WhatsApp, migrações, fluxo de pagamento e falhas
 npm run build && npm run check:bundle   # garante que o bundle não contém conteúdo pago
 ```
 
@@ -36,7 +37,9 @@ O provedor `fake` é bloqueado em produção.
    - **Webhooks** → URL `https://SEU-DOMINIO/api/webhooks/mercadopago`, evento **Order (Mercado Pago)**.
      Copie a **assinatura secreta** para `MP_WEBHOOK_SECRET`.
    - Teste primeiro com credenciais e usuários de teste, depois faça uma compra real controlada.
-4. **Resend**: valide o domínio de envio e preencha `RESEND_API_KEY` e `EMAIL_FROM`.
+4. **WhatsApp**: comece com `WHATSAPP_PROVIDER=none`. Para envio automático do link, crie na Meta (WhatsApp Business
+   Platform) um template de utilidade aprovado com `{{1}}` = nome e `{{2}}` = link, e preencha `WHATSAPP_TOKEN`,
+   `WHATSAPP_PHONE_NUMBER_ID` e `WHATSAPP_TEMPLATE_NAME`.
 5. **Meta**: `META_PIXEL_ID`. O Pixel só carrega após o aceite de cookies. Purchase usa `event_id = purchase_<pedido>`
    no navegador e (opcional) no servidor via `META_CAPI_TOKEN`, para deduplicação.
 
@@ -48,12 +51,15 @@ A documentação do Mercado Pago estava inacessível no ambiente de desenvolvime
 - O status de Order paga chega como `processed/accredited` (mapeado para `paid`). Status desconhecido nunca libera.
 - A assinatura `x-signature` valida (o alerta "assinatura INVÁLIDA" aparece no admin se não validar).
 - O campo `currency` volta `BRL` e `total_amount` volta `14.50`.
+- O Pix é criado sem e-mail do pagador (só nome e telefone). Se o Mercado Pago recusar, defina
+  `MP_PAYER_EMAIL_TEMPLATE` (ex.: `pix+{ref}@seu-dominio.com.br`). Nunca use o e-mail da própria conta recebedora.
 
 ## Operação (admin `/admin`)
 
-Buscar por e-mail, código `MC-…`, ID do pedido ou do pagamento. Também dá para consultar o provedor, reenviar o acesso,
+Buscar por WhatsApp, código `MC-…`, ID do pedido ou do pagamento. Também dá para consultar o provedor, gerar o link de acesso
+e abrir o WhatsApp do operador com a mensagem pronta (ou reenviar automático, com a API),
 liberar uma compra verificada (com operador, ID do pagamento e auditoria) e revogar por reembolso. Os alertas mostram
-pagamentos sem pedido, valor divergente, duplicidade, e-mails com falha e webhooks inválidos.
+pagamentos sem pedido, valor divergente, duplicidade, mensagens com falha e webhooks inválidos.
 
 ## Contas (ROAS bruto 1,8)
 
