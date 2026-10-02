@@ -1,5 +1,5 @@
 // Cálculo determinístico da especificação v1. Heurística editorial: não representa chance de sucesso.
-import { DIMENSIONS, DIMENSION_LABELS, QUESTIONS, type Answers, type Dimension, type QuizContext } from '../shared/quiz';
+import { DIMENSIONS, DIMENSION_LABELS, QUESTIONS, SCALE, type Answers, type Dimension, type QuizContext } from '../shared/quiz';
 import {
   CAREERS, CONTENT_VERSION, DIMENSION_ACTIVITIES, HOW_TO_ENTER, MOMENT_ENTRY, NO_PROFESSIONAL_FALLBACK,
   PROFESSIONAL_MESSAGE, REASON_PHRASES, RESULT_VERSION, SAFETY_NOTE, TIME_EXTENSIONS, type Career,
@@ -19,14 +19,39 @@ export function userVector(answers: Answers): UserVector {
 
 export function careerVector(c: Career): UserVector {
   const out = {} as UserVector;
-  for (const dim of DIMENSIONS) out[dim] = c.vector[dim] / 5;
+  // Mesma escala da pessoa (0 a 1): 1 → 0, 5 → 1.
+  for (const dim of DIMENSIONS) out[dim] = (c.vector[dim] - 1) / 4;
   return out;
 }
 
+function centered(x: UserVector): UserVector {
+  const mean = DIMENSIONS.reduce((s, d) => s + x[d], 0) / DIMENSIONS.length;
+  const out = {} as UserVector;
+  for (const d of DIMENSIONS) out[d] = x[d] - mean;
+  return out;
+}
+
+/** Peso do formato do perfil (o que se destaca) frente ao nível de interesse nas atividades da carreira. */
+export const SHAPE_WEIGHT = 0.7;
+
+/**
+ * Afinidade 0–100 (scoring-v2).
+ * - Formato (70%): correlação entre o que se destaca na pessoa e o que se destaca na carreira,
+ *   independente de a pessoa responder tudo alto ou tudo baixo.
+ * - Nível (30%): o quanto a pessoa gosta das atividades que a carreira mais exige (média ponderada).
+ * Heurística editorial: indica tarefas que tendem a dar energia, não chance de sucesso.
+ */
 export function affinity(u: UserVector, v: UserVector): number {
-  const distance = DIMENSIONS.reduce((s, d) => s + Math.abs(u[d] - v[d]), 0) / 6;
+  const uc = centered(u);
+  const vc = centered(v);
+  const nu = Math.sqrt(DIMENSIONS.reduce((s, d) => s + uc[d] ** 2, 0));
+  const nv = Math.sqrt(DIMENSIONS.reduce((s, d) => s + vc[d] ** 2, 0));
+  const corr = nu < 1e-9 || nv < 1e-9 ? 0 : DIMENSIONS.reduce((s, d) => s + uc[d] * vc[d], 0) / (nu * nv);
+  const wsum = DIMENSIONS.reduce((s, d) => s + v[d], 0) || 1;
+  const level = DIMENSIONS.reduce((s, d) => s + v[d] * u[d], 0) / wsum;
+  const score = 100 * (SHAPE_WEIGHT * (corr + 1) / 2 + (1 - SHAPE_WEIGHT) * level);
   // Arredonda para que afinidades matematicamente iguais empatem de fato (ruído de ponto flutuante).
-  return Math.round(100 * (1 - distance) * 1e9) / 1e9;
+  return Math.round(score * 1e9) / 1e9;
 }
 
 export function isBroadProfile(answers: Answers, u: UserVector): boolean {
@@ -93,10 +118,46 @@ export function buildPreview(answers: Answers): PreviewSummary {
   };
 }
 
+// ---------- evidências tiradas das próprias respostas (nada inventado) ----------
+
+const scaleLabel = (n: number) => SCALE.find((x) => x.value === n)?.label ?? String(n);
+const quote = (q: { text: string }, n: number) => `Você marcou “${scaleLabel(n)}” em “${q.text.replace(/\.$/, '')}”`;
+
+/** Dimensões que a carreira mais exige (vetor ≥ 4), da mais para a menos exigida. */
+function demandedDims(c: Career): Dimension[] {
+  return [...DIMENSIONS].filter((d) => c.vector[d] >= 4).sort((a, b) => c.vector[b] - c.vector[a] || DIMENSIONS.indexOf(a) - DIMENSIONS.indexOf(b));
+}
+
+/** Até duas frases que a pessoa marcou alto (4–5) nas atividades centrais da carreira, de dimensões diferentes. */
+export function evidenceFor(answers: Answers, c: Career): string[] {
+  const high = (d: Dimension) =>
+    QUESTIONS.filter((q) => q.dimension === d && (answers[q.id] ?? 0) >= 4).sort((x, y) => answers[y.id]! - answers[x.id]!);
+  const picks = demandedDims(c).map((d) => high(d)[0]).filter(Boolean);
+  const extra = demandedDims(c).flatMap((d) => high(d).slice(1));
+  return [...picks, ...extra].slice(0, 2).map((q) => quote(q, answers[q.id]!));
+}
+
+/** Uma frase que a pessoa marcou baixo (1–2) em algo que a carreira exige bastante. */
+export function tensionFor(answers: Answers, c: Career): string | null {
+  const dims = demandedDims(c);
+  const q = QUESTIONS.filter((x) => dims.includes(x.dimension) && (answers[x.id] ?? 5) <= 2)
+    .sort((a, b) => answers[a.id]! - answers[b.id]! || dims.indexOf(a.dimension) - dims.indexOf(b.dimension))[0];
+  return q ? `${quote(q, answers[q.id]!)}, e esta rotina pede isso com frequência. Vale testar essa parte com atenção no plano.` : null;
+}
+
+export type ProfileBar = { id: Dimension; label: string; score: number };
+export type LeftOut = { name: string; reason: string };
+
 export type MapCard = {
   careerId: string;
   position: number;
   name: string;
+  /** Afinidade 0–100 (scoring-v2). Ausente em mapas antigos. */
+  match?: number;
+  /** Respostas da própria pessoa que sustentam a sugestão. */
+  evidence?: string[];
+  /** Resposta baixa da pessoa em algo que a carreira exige. */
+  tension?: string | null;
   reasons: string[];
   routine: string;
   attention: string;
@@ -114,7 +175,11 @@ export type ResultSnapshot = {
   broadProfile: boolean;
   summary: PreviewSummary;
   context: QuizContext;
+  /** Perfil da pessoa nas 6 dimensões (0–100), do maior para o menor. Ausente em mapas antigos. */
+  profile?: ProfileBar[];
   cards: MapCard[];
+  /** Os dois caminhos menos compatíveis e o porquê, a partir das respostas. */
+  leftOut?: LeftOut[];
   common: {
     professionalMessage: string;
     howToEnter: string;
@@ -144,6 +209,9 @@ export function computeResult(answers: Answers, context: QuizContext): ComputedR
       careerId: c.id,
       position: i + 1,
       name: c.name,
+      match: Math.round(r.affinity),
+      evidence: evidenceFor(answers, c),
+      tension: tensionFor(answers, c),
       reasons: [
         `${REASON_PHRASES[d1]}. Essa rotina envolve ${lowerFirst(c.routine)}`,
         `${REASON_PHRASES[d2]}, algo presente no dia a dia de quem trabalha com ${lowerFirst(c.name)}.`,
@@ -160,6 +228,19 @@ export function computeResult(answers: Answers, context: QuizContext): ComputedR
     };
   });
 
+  const profile: ProfileBar[] = topDims(u, 6).map((id) => ({ id, label: DIMENSION_LABELS[id], score: Math.round(u[id] * 100) }));
+  const usedGap = new Set<Dimension>();
+  const leftOut: LeftOut[] = ranking.slice(-2).reverse().map((r) => {
+    const c = CAREERS.find((x) => x.id === r.id)!;
+    const gaps = {} as Record<Dimension, number>;
+    for (const d of DIMENSIONS) gaps[d] = careerVector(c)[d] - u[d];
+    // Evita repetir a mesma explicação nos dois caminhos.
+    const d = topDims(gaps, 6).find((x) => gaps[x] > 0.25 && !usedGap.has(x));
+    if (!d) return { name: c.name, reason: 'O formato das suas preferências combina menos com a rotina deste caminho.' };
+    usedGap.add(d);
+    return { name: c.name, reason: `Pede ${DIMENSION_ACTIVITIES[d]}, e suas respostas nessa parte ficaram entre as mais baixas.` };
+  });
+
   const dailyTime = context.dailyTime ?? 15;
   return {
     scores: { user: u, ranking },
@@ -170,7 +251,9 @@ export function computeResult(answers: Answers, context: QuizContext): ComputedR
       broadProfile: broad,
       summary: buildPreview(answers),
       context: { moment: context.moment, dailyTime: context.dailyTime, currentArea: context.currentArea },
+      profile,
       cards,
+      leftOut,
       common: {
         professionalMessage: PROFESSIONAL_MESSAGE,
         howToEnter: HOW_TO_ENTER,

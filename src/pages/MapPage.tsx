@@ -6,6 +6,7 @@ import { track } from '../analytics';
 
 type Card = {
   careerId: string; position: number; name: string; reasons: string[]; routine: string; attention: string;
+  match?: number; evidence?: string[]; tension?: string | null;
   firstStep: string; skill: string; miniActivity: string; search: string; entry: string; days: string[];
 };
 type MapData = {
@@ -19,7 +20,9 @@ type MapData = {
     broadProfile: boolean;
     summary: { topDimensions: { id: string; label: string }[]; explanation: string };
     context: { moment?: string; dailyTime?: number; currentArea?: string };
+    profile?: { id: string; label: string; score: number }[];
     cards: Card[];
+    leftOut?: { name: string; reason: string }[];
     common: { professionalMessage: string; howToEnter: string; noProfessionalFallback: string; safetyNote: string; timeExtension: string | null };
   };
   progress: { career_id: string; day: number; checked: boolean }[];
@@ -41,6 +44,14 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       setTimeout(() => setDone(false), 2000);
     }}>{done ? 'Copiado ✓' : label}</button>
   );
+}
+
+/** Dimensões em destaque; com empate na segunda posição, todas as empatadas entram. */
+function topLabels(map: MapData['map']): string {
+  const labels = map.profile
+    ? map.profile.filter((b) => b.score >= map.profile![1].score).map((b) => b.label)
+    : map.summary.topDimensions.map((d) => d.label);
+  return labels.length <= 2 ? labels.join(' e ') : `${labels.slice(0, -1).join(', ')} e ${labels[labels.length - 1]}`;
 }
 
 export function MapPage() {
@@ -136,18 +147,49 @@ export function MapPage() {
         <p style={{ marginBottom: 0 }}>
           {map.broadProfile
             ? 'Seu perfil reúne interesses variados. Os caminhos abaixo são experiências exploratórias, não uma profissão ideal.'
-            : <>Suas preferências mais altas: <strong>{map.summary.topDimensions.map((d) => d.label).join(' e ')}</strong>.</>}
+            : <>Suas preferências mais altas: <strong>{topLabels(map)}</strong>.</>}
         </p>
       </div>
+      {map.profile && (
+        <section className="card" aria-labelledby="perfil-title">
+          <h2 id="perfil-title" style={{ marginBottom: 4 }}>Seu perfil de interesses</h2>
+          <p className="small muted">O quanto cada tipo de atividade combina com você, pelas suas 12 respostas (0 a 100).</p>
+          <ul className="profile" role="list">
+            {map.profile.map((b) => (
+              // Destaque: as duas maiores e quem empatar com a segunda.
+              <li key={b.id} className={!map.broadProfile && b.score >= map.profile![1].score ? 'top' : ''} title={`${b.label}: ${b.score} de 100`}>
+                <span className="pl">{b.label.charAt(0).toUpperCase() + b.label.slice(1)}</span>
+                <span className="pt" aria-hidden="true"><span style={{ width: `${Math.max(b.score, 2)}%` }} /></span>
+                <span className="pv">{b.score}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="small muted">Ordem baseada nas suas respostas e no catálogo de 12 caminhos. Preferência por uma atividade não comprova habilidade.</p>
 
       <h2 style={{ marginTop: 20 }}>Seus cinco caminhos</h2>
       {map.cards.map((c) => (
         <article key={c.careerId} className="card career">
           <div className="pos">{c.position}º caminho</div>
-          <h3>{c.name}</h3>
-          <p>{c.reasons[0]}</p>
-          <p>{c.reasons[1]}</p>
+          <div className="career-head">
+            <h3>{c.name}</h3>
+            {c.match !== undefined && <span className="match" title="Afinidade com as suas respostas">{c.match}% de afinidade</span>}
+          </div>
+          {c.evidence && c.evidence.length > 0 ? (
+            <>
+              <div className="small" style={{ fontWeight: 700, color: 'var(--title)' }}>Por que combina com você</div>
+              <ul className="evidence">
+                {c.evidence.map((e) => <li key={e}>{e}.</li>)}
+              </ul>
+            </>
+          ) : (
+            <>
+              <p>{c.reasons[0]}</p>
+              <p>{c.reasons[1]}</p>
+            </>
+          )}
+          {c.tension && <div className="status warn small" style={{ marginTop: 8, fontWeight: 500 }}><strong>Onde pode pesar:</strong> {c.tension}</div>}
           <dl>
             <dt>Rotina</dt><dd>{c.routine}</dd>
             <dt>Ponto de atenção</dt><dd>{c.attention}</dd>
@@ -174,6 +216,16 @@ export function MapPage() {
         </article>
       ))}
 
+
+      {map.leftOut && map.leftOut.length > 0 && (
+        <section className="card soft" aria-labelledby="fora-title">
+          <h3 id="fora-title">Por que outros caminhos ficaram de fora</h3>
+          {map.leftOut.map((l) => (
+            <p key={l.name} className="small" style={{ marginBottom: 8 }}><strong>{l.name}.</strong> {l.reason}</p>
+          ))}
+          <p className="small muted" style={{ marginBottom: 0 }}>Não quer dizer que você não conseguiria: só que, hoje, suas respostas apontam mais para os cinco acima.</p>
+        </section>
+      )}
 
       <section className="card interest-card no-print" aria-labelledby="interest-title">
         <h2 id="interest-title">Quer ir além do mapa?</h2>

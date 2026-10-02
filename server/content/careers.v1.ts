@@ -3,7 +3,7 @@
 import type { Dimension } from '../../shared/quiz';
 
 export const CONTENT_VERSION = 'content-v1';
-export const RESULT_VERSION = 'scoring-v1';
+export const RESULT_VERSION = 'scoring-v2';
 
 export type Career = {
   id: string;

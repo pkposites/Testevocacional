@@ -22,11 +22,34 @@ describe('cálculo da especificação', () => {
     expect(u).toEqual({ P: 0, A: 1, C: 0.625, S: 0.25, N: 0.125, O: 0.875 });
   });
 
-  it('afinidade = 100 × (1 − Σ|u−v|/6) com vetor editorial ÷ 5', () => {
-    const u = { P: 0, A: 1, C: 0.5, S: 0.5, N: 0.5, O: 1 };
-    const v = careerVector(CAREERS[0]); // 1,5,3,2,3,4 → 0.2,1,0.6,0.4,0.6,0.8
-    const expected = 100 * (1 - (0.2 + 0 + 0.1 + 0.1 + 0.1 + 0.2) / 6);
-    expect(affinity(u, v)).toBeCloseTo(expected, 8);
+  it('afinidade v2: formato do perfil pesa mais que o nível das respostas', () => {
+    const v = careerVector(CAREERS[1]); // Análise de dados 1,5,2,2,1,5 → 0,1,.25,.25,0,1
+    expect(v).toEqual({ P: 0, A: 1, C: 0.25, S: 0.25, N: 0, O: 1 });
+    const igual = affinity(v, v);
+    const oposto = affinity({ P: 1, A: 0, C: 0.75, S: 0.75, N: 1, O: 0 }, v);
+    expect(igual).toBeGreaterThan(95);
+    expect(oposto).toBeLessThan(10);
+    // Mesmo formato, respostas mais baixas: a ordem entre carreiras não muda.
+    const alto = { P: 0.25, A: 1, C: 0.5, S: 0.25, N: 0.25, O: 0.75 };
+    const baixo = { P: 0, A: 0.75, C: 0.25, S: 0, N: 0, O: 0.5 };
+    expect(rankCareers(alto).slice(0, 3).map((r) => r.id)).toEqual(rankCareers(baixo).slice(0, 3).map((r) => r.id));
+  });
+
+  it('nenhuma carreira domina: em respostas aleatórias, nenhuma fica em 1º para mais de 18% das pessoas', () => {
+    let seed = 42;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const top1: Record<string, number> = {};
+    const N = 20000;
+    for (let i = 0; i < N; i++) {
+      const a: Answers = {};
+      for (const q of QUESTIONS) a[q.id] = 1 + Math.floor(rnd() * 5);
+      const id = rankCareers(userVector(a))[0].id;
+      top1[id] = (top1[id] ?? 0) + 1;
+    }
+    for (const c of CAREERS) {
+      expect((top1[c.id] ?? 0) / N).toBeLessThan(0.18);
+      expect((top1[c.id] ?? 0) / N).toBeGreaterThan(0.01);
+    }
   });
 
   it('empate é resolvido pelo ID crescente', () => {
@@ -72,10 +95,10 @@ describe('cálculo da especificação', () => {
 
   it('razões: duas dimensões com maior min(u,v), desempate P,A,C,S,N,O', () => {
     const u = { P: 1, A: 1, C: 1, S: 1, N: 1, O: 1 };
-    // Gestão de tráfego v = .2,1,.6,.4,.6,.8 → min = v → A(1) e O(.8)
+    // Gestão de tráfego v = 0,1,.5,.25,.5,.75 → min = v → A(1) e O(.75)
     expect(reasonDims(u, CAREERS[0])).toEqual(['A', 'O']);
     const flat = { P: 0.1, A: 0.1, C: 0.1, S: 0.1, N: 0.1, O: 0.1 };
-    expect(reasonDims(flat, CAREERS[0])).toEqual(['P', 'A']);
+    expect(reasonDims(flat, CAREERS[0])).toEqual(['A', 'C']); // P da carreira é 0
   });
 
   it('ponto de atenção: gap > 0,4 gera texto da atividade; senão, texto editorial', () => {
@@ -99,5 +122,31 @@ describe('cálculo da especificação', () => {
     expect(p.topDimensions.map((d) => d.id)).toEqual(['A', 'O']);
     const json = JSON.stringify(p);
     for (const c of CAREERS) expect(json).not.toContain(c.name);
+  });
+
+  it('entregável: evidências citam só respostas reais (4–5), atenção cita resposta baixa, e perfis diferentes geram mapas diferentes', () => {
+    const a = answersFrom({ P: [2, 3], A: [5, 5], C: [4, 4], S: [2, 1], N: [3, 2], O: [4, 4] });
+    const r = computeResult(a, { moment: 'change', dailyTime: 30 }).snapshot;
+    expect(r.profile!.map((b) => b.id)).toEqual(['A', 'C', 'O', 'P', 'N', 'S']);
+    expect(r.profile![0].score).toBe(100);
+    for (const c of r.cards) {
+      expect(c.match).toBeGreaterThan(0);
+      for (const e of c.evidence!) {
+        const q = QUESTIONS.find((x) => e.includes(x.text.replace(/\.$/, '')))!;
+        expect(q).toBeTruthy();
+        expect(a[q.id]).toBeGreaterThanOrEqual(4);
+      }
+      if (c.tension) {
+        const q = QUESTIONS.find((x) => c.tension!.includes(x.text.replace(/\.$/, '')))!;
+        expect(a[q.id]).toBeLessThanOrEqual(2);
+      }
+    }
+    expect(r.cards.map((c) => c.match)).toEqual([...r.cards.map((c) => c.match!)].sort((x, y) => y - x));
+    expect(r.leftOut).toHaveLength(2);
+    expect(r.leftOut!.map((l) => l.name)).toContain('Recrutamento e seleção'); // colaboração baixa
+
+    const pessoas = computeResult(answersFrom({ P: [1, 2], A: [2, 2], C: [3, 3], S: [5, 5], N: [5, 4], O: [3, 3] }), { moment: 'first', dailyTime: 15 }).snapshot;
+    expect(pessoas.cards[0].name).not.toBe(r.cards[0].name);
+    expect(pessoas.cards.map((c) => c.careerId)).not.toEqual(r.cards.map((c) => c.careerId));
   });
 });
