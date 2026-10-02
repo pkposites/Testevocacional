@@ -1,3 +1,4 @@
+import { CATALOG_SIZE } from '../../shared/quiz';
 import { useEffect, useState } from 'react';
 import { brl, getConfig, type PublicConfig } from '../api';
 
@@ -30,7 +31,7 @@ export function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
         <h3>O que é</h3>
         <p>Mapa da Carreira: teste gratuito de preferências que gera uma página privada com cinco caminhos sugeridos, explicações, pontos de atenção, primeiro passo e um plano prático de sete dias. Não há cobrança.</p>
         <h3>Natureza do resultado</h3>
-        <p>Ferramenta de exploração baseada em preferências declaradas. Não é avaliação psicológica, teste de aptidão nem garantia de carreira, emprego ou renda. O catálogo contém 12 caminhos e não cobre todas as profissões.</p>
+        <p>Ferramenta de exploração baseada em preferências declaradas. Não é avaliação psicológica, teste de aptidão nem garantia de carreira, emprego ou renda. O catálogo contém {CATALOG_SIZE} caminhos e não cobre todas as profissões.</p>
         <h3>Seus dados</h3>
         <p>Pedimos primeiro nome e WhatsApp para liberar e guardar o seu mapa e falar com você sobre o resultado. Se você marcar interesse no trajeto/diagnóstico, poderemos te chamar no WhatsApp quando ele estiver disponível. Seu primeiro nome só aparece nas notificações do site se você autorizar. Você pode pedir a exclusão a qualquer momento pelo contato acima.</p>
       </div>
@@ -43,7 +44,7 @@ export function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
       <h3>Produto</h3>
       <p>Mapa da Carreira: página privada com cinco caminhos sugeridos a partir das suas respostas, explicações, pontos de atenção, primeiro passo e um plano prático de sete dias. Preço: {brl(cfg?.price_cents ?? 1450)}, pagamento único via Pix, sem assinatura.</p>
       <h3>Natureza do resultado</h3>
-      <p>Ferramenta de exploração baseada em preferências declaradas. Não é avaliação psicológica, teste de aptidão nem garantia de carreira, emprego ou renda. O catálogo contém 12 caminhos e não cobre todas as profissões.</p>
+      <p>Ferramenta de exploração baseada em preferências declaradas. Não é avaliação psicológica, teste de aptidão nem garantia de carreira, emprego ou renda. O catálogo contém {CATALOG_SIZE} caminhos e não cobre todas as profissões.</p>
       <h3>Entrega</h3>
       <p>{cfg?.delivery_mode === 'manual'
         ? `A liberação é conferida manualmente em ${cfg.manual_delivery_sla} após a confirmação do Pix. O link chega no WhatsApp informado.`

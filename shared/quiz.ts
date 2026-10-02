@@ -1,7 +1,7 @@
 // Conteúdo público do teste. Este arquivo vai para o navegador: não colocar aqui
 // ranking, catálogo de caminhos ou planos pagos (ficam em server/content).
 
-export const QUIZ_VERSION = 'quiz-v1';
+export const QUIZ_VERSION = 'quiz-v2';
 
 export type Dimension = 'P' | 'A' | 'C' | 'S' | 'N' | 'O';
 export const DIMENSIONS: Dimension[] = ['P', 'A', 'C', 'S', 'N', 'O'];
@@ -28,6 +28,13 @@ export const QUESTIONS: { id: string; text: string; dimension: Dimension }[] = [
   { id: 'Q10', text: 'Uma rotina com bastante troca e colaboração com pessoas me interessa.', dimension: 'S' },
   { id: 'Q11', text: 'Tenho interesse em negociar e tomar a iniciativa em projetos.', dimension: 'N' },
   { id: 'Q12', text: 'Sinto satisfação ao seguir um processo e conferir se tudo ficou correto.', dimension: 'O' },
+  // quiz-v2: uma terceira pergunta por área, cobrindo um lado que as duas primeiras não mediam.
+  { id: 'Q13', text: 'Prefiro aprender fazendo com as mãos do que só lendo ou assistindo.', dimension: 'P' },
+  { id: 'Q14', text: 'Gosto de descobrir como funciona uma ferramenta, um sistema ou uma regra nova.', dimension: 'A' },
+  { id: 'Q15', text: 'Gosto de cuidar do visual ou do jeito de apresentar algo para ficar mais bonito ou interessante.', dimension: 'C' },
+  { id: 'Q16', text: 'Fico bem quando consigo cuidar de alguém ou deixar uma pessoa mais tranquila.', dimension: 'S' },
+  { id: 'Q17', text: 'Fico à vontade para conversar com desconhecidos e apresentar uma proposta.', dimension: 'N' },
+  { id: 'Q18', text: 'Gosto de planejar com antecedência e acompanhar se o plano está sendo cumprido.', dimension: 'O' },
 ];
 
 export const SCALE: { value: number; label: string }[] = [
@@ -53,6 +60,10 @@ export const DAILY_TIMES: { value: DailyTime; label: string }[] = [
 ];
 
 export const CURRENT_AREA_MAX = 80;
+
+/** Tamanho do catálogo (o catálogo em si fica só no servidor; um teste confere este número). */
+export const CATALOG_SIZE = 24;
+export const QUIZ_MINUTES = 4;
 
 export type Answers = Partial<Record<string, number>>;
 export type QuizContext = { moment?: Moment; dailyTime?: DailyTime; currentArea?: string };

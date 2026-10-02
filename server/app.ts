@@ -296,7 +296,7 @@ route('POST', '/api/results', async (app, ctx) => {
   if (tracking.consent || tracking.fbp || tracking.fbc) {
     s = await one(app.db, `update quiz_sessions set attribution = attribution || $2::jsonb where id = $1 returning *`, [s.id, JSON.stringify(tracking)]);
   }
-  if (!isCompleteAnswers(s.answers)) throw new ApiError(400, 'incomplete', 'Responda as 12 perguntas.');
+  if (!isCompleteAnswers(s.answers)) throw new ApiError(400, 'incomplete', `Responda as ${QUESTIONS.length} perguntas.`);
   if (!isCompleteContext(s.context)) throw new ApiError(400, 'incomplete_context', 'Informe seu momento de carreira e o tempo disponível.');
   let row = await one(app.db, 'select id, snapshot from results where session_id = $1 and answer_revision = $2', [s.id, s.answer_revision]);
   if (!row) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { brl, getConfig, getMySession } from '../api';
+import { QUESTIONS, QUIZ_MINUTES } from '../../shared/quiz';
 
 export function Home() {
   const nav = useNavigate();
@@ -18,19 +19,19 @@ export function Home() {
       <h1>Qual caminho profissional vale a pena você testar?</h1>
       {free ? (
         <p>
-          Responda 12 perguntas sobre o que você gosta de fazer e receba <strong>grátis</strong> seu mapa com cinco caminhos e um plano de
+          Responda {QUESTIONS.length} perguntas sobre o que você gosta de fazer e receba <strong>grátis</strong> seu mapa com cinco caminhos e um plano de
           sete dias para testar o que mais combina com você.
         </p>
       ) : (
         <p>
-          Responda 12 perguntas sobre o que você gosta de fazer. Veja uma prévia gratuita e, se quiser, desbloqueie seu mapa com
+          Responda {QUESTIONS.length} perguntas sobre o que você gosta de fazer. Veja uma prévia gratuita e, se quiser, desbloqueie seu mapa com
           cinco caminhos e um plano de sete dias por {brl(price)}.
         </p>
       )}
       {resume ? (
         <div className="stack">
           <button className="btn" onClick={() => nav(resume.hasResult ? '/previa' : '/teste')}>
-            {resume.hasResult ? 'Ver minha prévia' : `Continuar teste (${resume.progress} de 12)`}
+            {resume.hasResult ? 'Ver minha prévia' : `Continuar teste (${resume.progress} de ${QUESTIONS.length})`}
           </button>
           <button className="btn secondary" onClick={() => nav('/teste?novo=1')}>Começar um novo teste</button>
         </div>
@@ -44,7 +45,7 @@ export function Home() {
       <div className="card soft" style={{ marginTop: 24 }}>
         <h3>Como funciona</h3>
         <ol className="steps">
-          <li>Você responde 12 frases sobre atividades que gosta ou não de fazer. Leva cerca de 3 minutos.</li>
+          <li>Você responde {QUESTIONS.length} frases sobre atividades que gosta ou não de fazer. Leva cerca de {QUIZ_MINUTES} minutos.</li>
           <li>Vê suas duas preferências mais fortes e um exercício rápido.</li>
           {free
             ? <li>Informa nome e WhatsApp e recebe o mapa completo: cinco caminhos, os motivos e um plano prático de 7 dias. Tudo grátis.</li>

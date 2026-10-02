@@ -128,13 +128,24 @@ function demandedDims(c: Career): Dimension[] {
   return [...DIMENSIONS].filter((d) => c.vector[d] >= 4).sort((a, b) => c.vector[b] - c.vector[a] || DIMENSIONS.indexOf(a) - DIMENSIONS.indexOf(b));
 }
 
-/** Até duas frases que a pessoa marcou alto (4–5) nas atividades centrais da carreira, de dimensões diferentes. */
-export function evidenceFor(answers: Answers, c: Career): string[] {
-  const high = (d: Dimension) =>
-    QUESTIONS.filter((q) => q.dimension === d && (answers[q.id] ?? 0) >= 4).sort((x, y) => answers[y.id]! - answers[x.id]!);
-  const picks = demandedDims(c).map((d) => high(d)[0]).filter(Boolean);
-  const extra = demandedDims(c).flatMap((d) => high(d).slice(1));
-  return [...picks, ...extra].slice(0, 2).map((q) => quote(q, answers[q.id]!));
+/**
+ * Até duas frases que a pessoa marcou alto (4–5) nas atividades centrais da carreira, de áreas diferentes
+ * quando possível. Entre respostas iguais, prefere as perguntas que melhor representam a carreira.
+ */
+export function evidenceFor(answers: Answers, c: Career, used: Set<string> = new Set()): string[] {
+  const dims = demandedDims(c);
+  const hint = (id: string) => {
+    const i = c.evidenceHints?.indexOf(id) ?? -1;
+    return i === -1 ? 99 : i;
+  };
+  // Frases já citadas em caminhos acima vão para o fim da fila, para cada caminho trazer motivos próprios.
+  const high = QUESTIONS.filter((q) => dims.includes(q.dimension) && (answers[q.id] ?? 0) >= 4)
+    .sort((x, y) => Number(used.has(x.id)) - Number(used.has(y.id)) || answers[y.id]! - answers[x.id]! || hint(x.id) - hint(y.id) || dims.indexOf(x.dimension) - dims.indexOf(y.dimension));
+  const picks: typeof high = [];
+  for (const q of high) if (picks.length < 2 && !picks.some((p) => p.dimension === q.dimension)) picks.push(q);
+  for (const q of high) if (picks.length < 2 && !picks.includes(q)) picks.push(q);
+  for (const q of picks) used.add(q.id);
+  return picks.map((q) => quote(q, answers[q.id]!));
 }
 
 /** Uma frase que a pessoa marcou baixo (1–2) em algo que a carreira exige bastante. */
@@ -202,6 +213,7 @@ export function computeResult(answers: Answers, context: QuizContext): ComputedR
   const broad = isBroadProfile(answers, u);
   const moment = context.moment ?? 'explore';
 
+  const quoted = new Set<string>();
   const cards: MapCard[] = top.map((r, i) => {
     const c = CAREERS.find((x) => x.id === r.id)!;
     const [d1, d2] = reasonDims(u, c);
@@ -210,7 +222,7 @@ export function computeResult(answers: Answers, context: QuizContext): ComputedR
       position: i + 1,
       name: c.name,
       match: Math.round(r.affinity),
-      evidence: evidenceFor(answers, c),
+      evidence: evidenceFor(answers, c, quoted),
       tension: tensionFor(answers, c),
       reasons: [
         `${REASON_PHRASES[d1]}. Essa rotina envolve ${lowerFirst(c.routine)}`,

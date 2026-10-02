@@ -169,7 +169,7 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
     funnel: [
       { key: 'visits', label: 'Visitas na página inicial', value: ev('PageView', 'total') },
       { key: 'started', label: 'Começaram o teste', value: started },
-      { key: 'completed', label: 'Terminaram as 12 perguntas', value: n(quiz.Q12) },
+      { key: 'completed', label: `Terminaram as ${QUESTIONS.length} perguntas`, value: n(quiz[QUESTIONS[QUESTIONS.length - 1].id]) },
       { key: 'result', label: 'Viram a prévia', value: n(quiz.with_result) },
       ...(mode === 'free'
         ? [

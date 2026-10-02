@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { maskBrPhone, normalizeBrPhone } from '../../shared/phone';
+import { QUESTIONS } from '../../shared/quiz';
 import { api, brl, getConfig, getMySession, storage, type PublicConfig } from '../api';
 import { getConsent, metaCookies, track } from '../analytics';
 
@@ -28,7 +29,7 @@ export function Preview() {
     (async () => {
       try {
         const s = await getMySession();
-        if (!s || s.progress < 12) return nav('/teste', { replace: true });
+        if (!s || s.progress < QUESTIONS.length) return nav('/teste', { replace: true });
         const r = s.result ?? (await api('POST', '/api/results'));
         setResultId(r.result_id);
         setSummary(r.summary);

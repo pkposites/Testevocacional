@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { QUESTIONS, type Answers } from '../shared/quiz';
+import { CATALOG_SIZE, QUESTIONS, type Answers } from '../shared/quiz';
 import { CAREERS } from '../server/content/careers.v1';
 import { affinity, attentionText, buildPreview, careerVector, computeResult, isBroadProfile, rankCareers, reasonDims, userVector } from '../server/scoring';
 
-function answersFrom(byDim: Record<string, [number, number]>): Answers {
+/** Respostas por área; se vierem só duas, a terceira repete a segunda. */
+function answersFrom(byDim: Record<string, number[]>): Answers {
   const a: Answers = {};
   const seen: Record<string, number> = {};
   for (const q of QUESTIONS) {
     const i = seen[q.dimension] ?? 0;
-    a[q.id] = byDim[q.dimension][i];
+    const vals = byDim[q.dimension];
+    a[q.id] = vals[Math.min(i, vals.length - 1)];
     seen[q.dimension] = i + 1;
   }
   return a;
@@ -18,8 +20,8 @@ const all = (n: number) => Object.fromEntries(QUESTIONS.map((q) => [q.id, n])) a
 
 describe('cálculo da especificação', () => {
   it('d = (média − 1) / 4', () => {
-    const u = userVector(answersFrom({ P: [1, 1], A: [5, 5], C: [3, 4], S: [2, 2], N: [1, 2], O: [4, 5] }));
-    expect(u).toEqual({ P: 0, A: 1, C: 0.625, S: 0.25, N: 0.125, O: 0.875 });
+    const u = userVector(answersFrom({ P: [1, 1, 1], A: [5, 5, 5], C: [2, 4, 3], S: [2, 2, 2], N: [1, 2, 3], O: [4, 5, 3] }));
+    expect(u).toEqual({ P: 0, A: 1, C: 0.5, S: 0.25, N: 0.25, O: 0.75 });
   });
 
   it('afinidade v2: formato do perfil pesa mais que o nível das respostas', () => {
@@ -35,7 +37,7 @@ describe('cálculo da especificação', () => {
     expect(rankCareers(alto).slice(0, 3).map((r) => r.id)).toEqual(rankCareers(baixo).slice(0, 3).map((r) => r.id));
   });
 
-  it('nenhuma carreira domina: em respostas aleatórias, nenhuma fica em 1º para mais de 18% das pessoas', () => {
+  it('nenhuma carreira domina: em respostas aleatórias, nenhuma fica em 1º para mais de 12% das pessoas', () => {
     let seed = 42;
     const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
     const top1: Record<string, number> = {};
@@ -47,8 +49,8 @@ describe('cálculo da especificação', () => {
       top1[id] = (top1[id] ?? 0) + 1;
     }
     for (const c of CAREERS) {
-      expect((top1[c.id] ?? 0) / N).toBeLessThan(0.18);
-      expect((top1[c.id] ?? 0) / N).toBeGreaterThan(0.01);
+      expect((top1[c.id] ?? 0) / N).toBeLessThan(0.12);
+      expect((top1[c.id] ?? 0) / N).toBeGreaterThan(0.005);
     }
   });
 
@@ -108,8 +110,11 @@ describe('cálculo da especificação', () => {
     expect(attentionText(high, CAREERS[0])).toBe(CAREERS[0].attention);
   });
 
-  it('todos os 12 caminhos têm conteúdo completo', () => {
-    expect(CAREERS).toHaveLength(12);
+  it('todos os caminhos têm conteúdo completo e o tamanho público do catálogo confere', () => {
+    expect(CAREERS).toHaveLength(CATALOG_SIZE);
+    expect(new Set(CAREERS.map((c) => c.id)).size).toBe(CAREERS.length);
+    expect(new Set(CAREERS.map((c) => c.name)).size).toBe(CAREERS.length);
+    for (const c of CAREERS) for (const h of c.evidenceHints ?? []) expect(QUESTIONS.some((q) => q.id === h)).toBe(true);
     for (const c of CAREERS) {
       expect(c.routine && c.attention && c.skill && c.search).toBeTruthy();
       expect(c.days).toHaveLength(7);
@@ -143,7 +148,9 @@ describe('cálculo da especificação', () => {
     }
     expect(r.cards.map((c) => c.match)).toEqual([...r.cards.map((c) => c.match!)].sort((x, y) => y - x));
     expect(r.leftOut).toHaveLength(2);
-    expect(r.leftOut!.map((l) => l.name)).toContain('Recrutamento e seleção'); // colaboração baixa
+    // Colaboração foi a área mais baixa: o motivo dos caminhos de fora cita isso.
+    expect(r.leftOut!.some((l) => l.reason.includes('troca e colaboração'))).toBe(true);
+    for (const l of r.leftOut!) expect(r.cards.map((c) => c.name)).not.toContain(l.name);
 
     const pessoas = computeResult(answersFrom({ P: [1, 2], A: [2, 2], C: [3, 3], S: [5, 5], N: [5, 4], O: [3, 3] }), { moment: 'first', dailyTime: 15 }).snapshot;
     expect(pessoas.cards[0].name).not.toBe(r.cards[0].name);

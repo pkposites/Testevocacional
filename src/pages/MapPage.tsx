@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { MOMENTS } from '../../shared/quiz';
+import { CATALOG_SIZE, MOMENTS } from '../../shared/quiz';
 import { api, ApiFailure } from '../api';
 import { track } from '../analytics';
 
@@ -153,7 +153,7 @@ export function MapPage() {
       {map.profile && (
         <section className="card" aria-labelledby="perfil-title">
           <h2 id="perfil-title" style={{ marginBottom: 4 }}>Seu perfil de interesses</h2>
-          <p className="small muted">O quanto cada tipo de atividade combina com você, pelas suas 12 respostas (0 a 100).</p>
+          <p className="small muted">O quanto cada tipo de atividade combina com você, pelas suas respostas ao teste (0 a 100).</p>
           <ul className="profile" role="list">
             {map.profile.map((b) => (
               // Destaque: as duas maiores e quem empatar com a segunda.
@@ -166,7 +166,7 @@ export function MapPage() {
           </ul>
         </section>
       )}
-      <p className="small muted">Ordem baseada nas suas respostas e no catálogo de 12 caminhos. Preferência por uma atividade não comprova habilidade.</p>
+      <p className="small muted">Ordem baseada nas suas respostas e no catálogo de {CATALOG_SIZE} caminhos. Preferência por uma atividade não comprova habilidade.</p>
 
       <h2 style={{ marginTop: 20 }}>Seus cinco caminhos</h2>
       {map.cards.map((c) => (

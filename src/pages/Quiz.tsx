@@ -42,7 +42,8 @@ export function Quiz() {
         setAnswers(merged);
         setContext({ ...s.context, ...(draft?.context ?? {}) });
         const firstMissing = QUESTIONS.findIndex((q) => !merged[q.id]);
-        setStep(draft ? Math.min(draft.step, firstMissing === -1 ? 12 : firstMissing) : firstMissing === -1 ? 12 : firstMissing);
+        const end = QUESTIONS.length;
+        setStep(draft ? Math.min(draft.step, firstMissing === -1 ? end : firstMissing) : firstMissing === -1 ? end : firstMissing);
         if (draft) void save(merged, { ...s.context, ...(draft.context ?? {}) });
       } catch (e) {
         if (e instanceof ApiFailure && (e.status === 401 || e.code === 'new')) {
@@ -166,7 +167,7 @@ export function Quiz() {
     <div className="wrap">
       <p className="small muted" aria-live="polite">Pergunta {step + 1} de {QUESTIONS.length}</p>
       <div className="progress" aria-hidden="true"><div style={{ width: `${(step / QUESTIONS.length) * 100}%` }} /></div>
-      {step === 6 && (
+      {step === Math.floor(QUESTIONS.length / 2) && (
         <div className="status info">Suas respostas estão ajudando a identificar as atividades que você prefere.</div>
       )}
       <h2>{q.text}</h2>
