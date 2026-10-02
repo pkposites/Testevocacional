@@ -5,6 +5,8 @@
 [functions]
   node_bundler = "esbuild"
   included_files = ["server/db/schema.sql"]
+  # PGlite só é usado em dev/testes locais.
+  external_node_modules = ["@electric-sql/pglite"]
 
 [[redirects]]
   from = "/*"

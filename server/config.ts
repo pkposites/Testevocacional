@@ -57,7 +57,7 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
     priceCents,
     currency: 'BRL',
     appSecret: req(e.APP_SECRET, 'APP_SECRET', env) ?? 'dev-secret-not-for-production',
-    databaseUrl: req(e.DATABASE_URL, 'DATABASE_URL', env),
+    databaseUrl: e.USE_NETLIFY_DB === '1' ? e.DATABASE_URL : req(e.DATABASE_URL, 'DATABASE_URL', env),
     mp: {
       accessToken: e.MP_ACCESS_TOKEN,
       webhookSecret: e.MP_WEBHOOK_SECRET,

@@ -10,7 +10,13 @@ let appPromise: Promise<App> | undefined;
 export function getApp(): Promise<App> {
   appPromise ??= (async () => {
     const cfg = loadConfig();
-    const db = cfg.databaseUrl ? await createPostgresDb(cfg.databaseUrl) : await createPgliteDb(process.env.PGLITE_DIR || undefined);
+    let url = cfg.databaseUrl;
+    if (!url && process.env.USE_NETLIFY_DB === '1') {
+      // Netlify Database: string de conexão do branch de banco deste deploy.
+      const { getConnectionString } = await import('@netlify/database');
+      url = getConnectionString();
+    }
+    const db = url ? await createPostgresDb(url) : await createPgliteDb(process.env.PGLITE_DIR || undefined);
     return { cfg, db, provider: createProvider(cfg), sendEmail: createEmailSender(cfg), fetchImpl: fetch };
   })().catch((e) => {
     appPromise = undefined;

@@ -785,8 +785,14 @@ route('POST', '/api/admin/orders/:id/revoke', async (app, ctx) => {
 route('POST', '/api/dev/fake-pay/:orderId', async (app, ctx) => {
   if (app.cfg.env === 'production' || app.provider.name !== 'fake') throw new ApiError(404, 'not_found', 'Rota não encontrada.');
   const body = await readJson(ctx);
-  const pay = await one(app.db, `select provider_resource_id from payments where order_id = $1 order by created_at desc limit 1`, [ctx.params.orderId]);
+  const pay = await one(
+    app.db,
+    `select p.provider_resource_id, o.id as order_id, o.amount_cents from payments p join orders o on o.id = p.order_id
+     where p.order_id = $1 order by p.created_at desc limit 1`,
+    [ctx.params.orderId],
+  );
   if (!pay) throw new ApiError(404, 'not_found', 'Sem pagamento.');
+  fakeStore.ensure({ resourceId: pay.provider_resource_id, externalReference: pay.order_id, status: 'pending', rawStatus: 'pending', amountCents: pay.amount_cents, currency: 'BRL' });
   fakeStore.setStatus(pay.provider_resource_id, body.status ?? 'paid');
   // Simula o webhook assinado do provedor.
   const raw = JSON.stringify({ event_id: `dev-${Date.now()}`, data: { id: pay.provider_resource_id } });

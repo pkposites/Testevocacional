@@ -14,6 +14,10 @@ export const fakeStore = {
   setStatus(id: string, status: NormalizedStatus) {
     this.set(id, { status, rawStatus: status });
   },
+  /** Recria um Pix falso a partir do banco (instâncias serverless não compartilham memória). */
+  ensure(st: ProviderPaymentState) {
+    if (!store.has(st.resourceId)) store.set(st.resourceId, st);
+  },
   all: () => [...store.values()],
   reset: () => store.clear(),
 };
