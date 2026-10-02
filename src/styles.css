@@ -255,3 +255,64 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .evidence { margin: 6px 0 10px; padding-left: 18px; }
 .evidence li { margin-bottom: 4px; font-size: 0.95rem; }
 @media print { .profile .pt > span { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* Ícones nas áreas e nos caminhos */
+.pl-icon { vertical-align: -3px; margin-right: 6px; color: var(--muted); }
+.profile li.top .pl-icon { color: var(--accent); }
+.career-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-dark); margin-right: 10px; vertical-align: -6px; }
+
+/* Faixa de topo que leva ao diagnóstico */
+.diag-banner { display: flex; gap: 10px; align-items: center; padding: 12px 14px; margin: 0 0 16px; border-radius: 12px; background: var(--title); color: #fff; text-decoration: none; font-size: 0.92rem; line-height: 1.35; }
+.diag-banner svg { flex: 0 0 auto; color: #ffb48a; }
+.diag-banner strong { color: #fff; }
+
+/* Oferta do diagnóstico */
+.diag { border: 2px solid var(--accent); background: linear-gradient(180deg, #fff6f0 0%, #fff 140px); }
+.diag-head h2 { margin: 8px 0 8px; }
+.diag-badge { display: inline-flex; gap: 6px; align-items: center; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--accent-dark); background: var(--accent-soft); border: 1px solid #f3c9ad; padding: 4px 10px; border-radius: 99px; }
+.diag-preview { margin: 6px 0 14px; padding: 14px; border-radius: 14px; background: var(--title); }
+.diag-doc { position: relative; background: #fff; border-radius: 10px; padding: 14px; overflow: hidden; }
+.diag-doc-top { display: flex; gap: 10px; align-items: center; }
+.diag-doc-icon { display: inline-flex; width: 34px; height: 34px; border-radius: 9px; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-dark); }
+.diag-doc-title { font-weight: 800; color: var(--title); font-size: 0.95rem; }
+.diag-doc-sub { font-size: 0.78rem; color: var(--muted); }
+.diag-lines { display: grid; gap: 7px; margin: 14px 0 12px; filter: blur(1.5px); }
+.diag-lines span { height: 8px; border-radius: 99px; background: #dfe5ee; }
+.diag-lines span:nth-child(1) { width: 92%; } .diag-lines span:nth-child(2) { width: 78%; } .diag-lines span:nth-child(3) { width: 86%; } .diag-lines span:nth-child(4) { width: 55%; }
+.diag-weeks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; filter: blur(1.5px); }
+.diag-weeks span { font-size: 0.72rem; font-weight: 700; text-align: center; padding: 10px 0; border-radius: 8px; background: var(--surface); color: var(--title); border: 1px solid var(--line); }
+.diag-lock { position: absolute; right: 12px; bottom: 12px; width: 44px; height: 44px; border-radius: 99px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; box-shadow: 0 4px 14px rgba(194, 65, 12, 0.35); }
+.diag-items { list-style: none; padding: 0; margin: 8px 0 16px; display: grid; gap: 8px; }
+.diag-items li { display: flex; gap: 10px; align-items: flex-start; font-size: 0.95rem; line-height: 1.4; }
+.diag-li-icon { flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
+.diag-after .status { display: flex; gap: 8px; align-items: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { font: inherit; font-size: 0.88rem; text-align: left; padding: 9px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; color: var(--text); cursor: pointer; }
+.chips button[aria-checked='true'] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); font-weight: 700; }
+
+/* Prévia bloqueada (antes do cadastro) */
+.locked-map { position: relative; display: grid; gap: 8px; margin: 4px 0 2px; }
+.locked-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff; }
+.locked-row .lr-icon { display: inline-flex; width: 32px; height: 32px; border-radius: 9px; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-dark); flex: 0 0 auto; }
+.locked-row .lr-name { flex: 1; height: 10px; border-radius: 99px; background: #dfe5ee; filter: blur(2px); }
+.locked-row .lr-pos { font-size: 0.75rem; font-weight: 800; color: var(--accent-dark); width: 22px; }
+.locked-row .lr-match { font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+.locked-row.first { border-color: #f3c9ad; background: var(--accent-soft); }
+.locked-row.first .lr-match { color: var(--accent-dark); }
+.locked-row .lr-lock { color: var(--muted); }
+
+/* Jornada na página inicial */
+.journey { list-style: none; padding: 0; margin: 18px 0 8px; display: grid; gap: 10px; }
+.journey li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }
+.journey .j-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-dark); }
+.journey strong { display: block; color: var(--title); }
+.journey span { font-size: 0.9rem; color: var(--muted); }
+.sample { margin-top: 14px; padding: 14px; border-radius: 14px; background: var(--title); color: #fff; }
+.sample-label { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #ffb48a; margin-bottom: 8px; }
+.sample-card { background: #fff; color: var(--text); border-radius: 10px; padding: 12px; }
+.sample-card + .sample-card { margin-top: 8px; }
+.sample-card .sc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sample-card .sc-name { font-weight: 800; color: var(--title); display: flex; gap: 8px; align-items: center; }
+.sample-card .sc-name svg { color: var(--accent-dark); }
+.sample-card .sc-why { font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
+.diag-after .status { align-items: flex-start; font-weight: 600; } .diag-ok-icon { flex: 0 0 20px; margin-top: 1px; }

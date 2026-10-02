@@ -166,4 +166,29 @@ describe('modo gratuito', () => {
     await c.req('POST', '/api/admin/login', { password: 'adm' });
     expect((await c.req('GET', '/api/admin/me?optional=1')).body).toEqual({ ok: true });
   });
+
+  it('diagnóstico: prévia traz só a afinidade do 1º caminho; respostas de interesse ficam no lead', async () => {
+    const c = new Client(app);
+    const r = await finishQuiz(c);
+    expect(typeof r.body.top_match).toBe('number');
+    expect(JSON.stringify(r.body)).not.toMatch(/cards|careerId/);
+    const lead = await c.req('POST', '/api/leads', { result_id: r.body.result_id, buyer_name: 'Bia', buyer_phone: '11977776666', contact_consent: true });
+    expect(lead.status).toBe(200);
+    // Cards do mapa trazem a área (ícone).
+    const full = await c.req('GET', `/api/results/${r.body.result_id}/full`);
+    expect(full.body.map.cards[0].dim).toMatch(/^[PACSNO]$/);
+    expect(full.body.interest_detail).toBeNull();
+    expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, want: 'hack' })).status).toBe(400);
+    await c.req('POST', '/api/interest', { result_id: r.body.result_id });
+    expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, want: 'roteiro' })).body.detail).toEqual({ want: 'roteiro' });
+    expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, price: 'ate50' })).body.detail).toEqual({ want: 'roteiro', price: 'ate50' });
+    expect((await c.req('GET', `/api/results/${r.body.result_id}/full`)).body.interest_detail).toEqual({ want: 'roteiro', price: 'ate50' });
+    // Outro visitante não consegue responder pelo mapa alheio.
+    const intruso = new Client(app);
+    expect((await intruso.req('POST', '/api/interest/details', { result_id: r.body.result_id, price: 'gratis' })).status).toBe(403);
+    const adm = new Client(app);
+    await adm.req('POST', '/api/admin/login', { password: 'adm' });
+    const leads = (await adm.req('GET', '/api/admin/leads')).body.leads;
+    expect(leads[0].interest_detail).toEqual({ want: 'roteiro', price: 'ate50' });
+  });
 });

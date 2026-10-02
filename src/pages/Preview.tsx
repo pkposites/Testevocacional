@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { maskBrPhone, normalizeBrPhone } from '../../shared/phone';
-import { QUESTIONS } from '../../shared/quiz';
+import { CATALOG_SIZE, QUESTIONS } from '../../shared/quiz';
+import { DimIcon, LockIcon } from '../components/Icons';
 import { api, brl, getConfig, getMySession, storage, type PublicConfig } from '../api';
 import { getConsent, metaCookies, track } from '../analytics';
 
@@ -12,6 +13,7 @@ export function Preview() {
   const [cfg, setCfg] = useState<PublicConfig | null>(null);
   const [resultId, setResultId] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [topMatch, setTopMatch] = useState<number | null>(null);
   const [purchased, setPurchased] = useState<string | null>(null);
   const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -30,7 +32,8 @@ export function Preview() {
       try {
         const s = await getMySession();
         if (!s || s.progress < QUESTIONS.length) return nav('/teste', { replace: true });
-        const r = s.result ?? (await api('POST', '/api/results'));
+        const r = await api('POST', '/api/results');
+        setTopMatch(typeof r.top_match === 'number' ? r.top_match : null);
         setResultId(r.result_id);
         setSummary(r.summary);
         if (s.purchased_result_id === r.result_id) setPurchased(r.result_id);
@@ -108,10 +111,26 @@ export function Preview() {
         ) : (
           <form className="card stack lead-card" onSubmit={submitFree} noValidate>
             <h2 style={{ marginBottom: 0 }}>Seu mapa completo está pronto, e é grátis</h2>
+            <p className="small muted" style={{ margin: 0 }}>
+              Comparamos suas {QUESTIONS.length} respostas com {CATALOG_SIZE} caminhos. Estes são os 5 que mais combinam com você:
+            </p>
+            <div className="locked-map" aria-label="Prévia bloqueada dos seus 5 caminhos">
+              {[0, 1, 2, 3, 4].map((i) => {
+                const dims = summary.topDimensions.map((d) => d.id);
+                return (
+                  <div key={i} className={`locked-row${i === 0 ? ' first' : ''}`}>
+                    <span className="lr-pos">{i + 1}º</span>
+                    <span className="lr-icon"><DimIcon dim={dims[i % dims.length]} size={17} /></span>
+                    <span className="lr-name" aria-hidden="true" />
+                    {i === 0 && topMatch !== null ? <span className="lr-match">{topMatch}% de afinidade</span> : <LockIcon size={16} className="lr-lock" />}
+                  </div>
+                );
+              })}
+            </div>
             <ul className="list" style={{ margin: 0 }}>
-              <li>Cinco caminhos sugeridos e os motivos</li>
-              <li>O que pode te incomodar em cada rotina</li>
-              <li>Um plano de sete dias para testar o caminho que escolher</li>
+              <li>Os 5 caminhos, com a sua % de afinidade em cada um</li>
+              <li>Por que cada um combina com você, citando suas próprias respostas</li>
+              <li>O que pode pesar em cada rotina e um plano de 7 dias para testar</li>
             </ul>
             <p className="small muted" style={{ margin: 0 }}>Informe seu nome e WhatsApp para liberar e guardar o seu mapa.</p>
             <div>

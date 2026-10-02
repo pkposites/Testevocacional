@@ -320,6 +320,8 @@ route('POST', '/api/results', async (app, ctx) => {
     result_id: row!.id,
     summary: snap.summary,
     broad_profile: snap.broadProfile,
+    // Para a prévia bloqueada: quanto o 1º caminho combina, sem revelar qual é.
+    top_match: snap.cards[0]?.match ?? null,
     event_id: eventIds.gameComplete(s.id, s.answer_revision),
   });
 });
@@ -572,6 +574,26 @@ route('POST', '/api/interest', async (app, ctx) => {
   return json(ctx, 200, { ok: true, event_id: eventId, interested_at: order!.diagnostic_interest_at });
 });
 
+export const INTEREST_WANTS = ['roteiro', 'cursos', 'vagas', 'mentoria'] as const;
+export const INTEREST_PRICES = ['gratis', 'ate20', 'ate50', 'ate100', 'mais100'] as const;
+
+/** Validação da oferta paga: o que mais ajudaria e quanto a pessoa pagaria (uma resposta por lead, pode trocar). */
+route('POST', '/api/interest/details', async (app, ctx) => {
+  const body = await readJson(ctx);
+  const ent = await authorizeResult(app, ctx, String(body.result_id ?? ''));
+  const want = INTEREST_WANTS.includes(body.want) ? body.want : null;
+  const price = INTEREST_PRICES.includes(body.price) ? body.price : null;
+  if (!want && !price) throw new ApiError(400, 'invalid_details', 'Escolha uma opção.');
+  const prev = await one(app.db, `select attribution from events where event_id = $1`, [`interestdetail_${ent.order_id}`]);
+  const detail = { ...(prev?.attribution ?? {}), ...(want ? { want } : {}), ...(price ? { price } : {}) };
+  await app.db.query(
+    `insert into events (event_id, order_id, name, attribution, consent_state) values ($1,$2,'InterestDetail',$3::jsonb,'unknown')
+     on conflict (event_id) do update set attribution = excluded.attribution`,
+    [`interestdetail_${ent.order_id}`, ent.order_id, JSON.stringify(detail)],
+  );
+  return json(ctx, 200, { ok: true, detail });
+});
+
 /** Notificações de prova social com dados REAIS: primeiro nome só de quem autorizou. */
 route('GET', '/api/social-proof', async (app, ctx) => {
   await limit(app, ctx, 'social', 60, 600);
@@ -748,6 +770,7 @@ route('GET', '/api/results/:id/full', async (app, ctx) => {
     selected_career_id: ent.selected_career_id,
     offer_mode: app.cfg.offerMode,
     diagnostic_interest: !!(await one(app.db, 'select diagnostic_interest_at from orders where id = $1', [ent.order_id]))?.diagnostic_interest_at,
+    interest_detail: (await one(app.db, `select attribution from events where event_id = $1`, [`interestdetail_${ent.order_id}`]))?.attribution ?? null,
     result_version: res!.result_version,
     content_version: res!.content_version,
     map: res!.snapshot,
@@ -926,7 +949,8 @@ route('GET', '/api/admin/leads', async (app, ctx) => {
     `select o.id, o.public_ref, o.buyer_name, o.buyer_phone, o.created_at, o.diagnostic_interest_at, o.public_name_ok, o.marketing_opt_in,
        r.snapshot->'cards'->0->>'name' as career, r.context->>'moment' as moment, r.context->>'dailyTime' as daily_time,
        o.attribution->>'utm_content' as utm_content, o.attribution->>'utm_term' as utm_term,
-       (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done
+       (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done,
+       (select ev.attribution from events ev where ev.event_id = 'interestdetail_' || o.id) as interest_detail
      from orders o join results r on r.id = o.result_id
      where o.provider = 'free' ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
      order by coalesce(o.diagnostic_interest_at, o.created_at) desc limit 1000`,

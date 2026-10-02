@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CATALOG_SIZE, MOMENTS } from '../../shared/quiz';
 import { api, ApiFailure } from '../api';
 import { track } from '../analytics';
+import { DiagnosticOffer } from '../components/DiagnosticOffer';
+import { DimIcon, SparkIcon } from '../components/Icons';
 
 type Card = {
   careerId: string; position: number; name: string; reasons: string[]; routine: string; attention: string;
-  match?: number; evidence?: string[]; tension?: string | null;
+  match?: number; evidence?: string[]; tension?: string | null; dim?: string;
   firstStep: string; skill: string; miniActivity: string; search: string; entry: string; days: string[];
 };
 type MapData = {
@@ -16,6 +18,7 @@ type MapData = {
   selected_career_id: string | null;
   offer_mode: 'free' | 'paid';
   diagnostic_interest: boolean;
+  interest_detail?: { want?: string; price?: string } | null;
   map: {
     broadProfile: boolean;
     summary: { topDimensions: { id: string; label: string }[]; explanation: string };
@@ -150,6 +153,12 @@ export function MapPage() {
             : <>Suas preferências mais altas: <strong>{topLabels(map)}</strong>.</>}
         </p>
       </div>
+      {!map.broadProfile && map.cards[0] && (
+        <a href="#diagnostico" className="diag-banner no-print">
+          <SparkIcon size={16} />
+          <span>{interest ? <>Você está na lista do <strong>Diagnóstico de {map.cards[0].name}</strong></> : <>Seu <strong>Diagnóstico de {map.cards[0].name}</strong> está em preparação. Ver o que vem nele</>}</span>
+        </a>
+      )}
       {map.profile && (
         <section className="card" aria-labelledby="perfil-title">
           <h2 id="perfil-title" style={{ marginBottom: 4 }}>Seu perfil de interesses</h2>
@@ -158,7 +167,7 @@ export function MapPage() {
             {map.profile.map((b) => (
               // Destaque: as duas maiores e quem empatar com a segunda.
               <li key={b.id} className={!map.broadProfile && b.score >= map.profile![1].score ? 'top' : ''} title={`${b.label}: ${b.score} de 100`}>
-                <span className="pl">{b.label.charAt(0).toUpperCase() + b.label.slice(1)}</span>
+                <span className="pl"><DimIcon dim={b.id} size={16} className="pl-icon" />{b.label.charAt(0).toUpperCase() + b.label.slice(1)}</span>
                 <span className="pt" aria-hidden="true"><span style={{ width: `${Math.max(b.score, 2)}%` }} /></span>
                 <span className="pv">{b.score}</span>
               </li>
@@ -169,11 +178,12 @@ export function MapPage() {
       <p className="small muted">Ordem baseada nas suas respostas e no catálogo de {CATALOG_SIZE} caminhos. Preferência por uma atividade não comprova habilidade.</p>
 
       <h2 style={{ marginTop: 20 }}>Seus cinco caminhos</h2>
-      {map.cards.map((c) => (
-        <article key={c.careerId} className="card career">
+      {map.cards.map((c, idx) => (
+        <Fragment key={c.careerId}>
+        <article className="card career">
           <div className="pos">{c.position}º caminho</div>
           <div className="career-head">
-            <h3>{c.name}</h3>
+            <h3>{c.dim && <span className="career-icon"><DimIcon dim={c.dim} size={18} /></span>}{c.name}</h3>
             {c.match !== undefined && <span className="match" title="Afinidade com as suas respostas">{c.match}% de afinidade</span>}
           </div>
           {c.evidence && c.evidence.length > 0 ? (
@@ -214,6 +224,14 @@ export function MapPage() {
             {selected === c.careerId ? 'Caminho escolhido ✓' : 'Quero experimentar este caminho'}
           </button>
         </article>
+        {idx === 0 && !map.broadProfile && (
+          <DiagnosticOffer
+            resultId={data.result_id} first={c} second={map.cards[1]} context={map.context}
+            firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail}
+            onInterested={() => setInterest(true)}
+          />
+        )}
+        </Fragment>
       ))}
 
 
@@ -227,7 +245,7 @@ export function MapPage() {
         </section>
       )}
 
-      <section className="card interest-card no-print" aria-labelledby="interest-title">
+      {map.broadProfile && <section className="card interest-card no-print" aria-labelledby="interest-title">
         <h2 id="interest-title">Quer ir além do mapa?</h2>
         <p>Estamos preparando um trajeto personalizado, com um diagnóstico do caminho que você escolher e os próximos passos para começar.</p>
         {interest ? (
@@ -238,7 +256,7 @@ export function MapPage() {
           </button>
         )}
         <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>Sem compromisso. Você só recebe uma mensagem quando estiver disponível.</p>
-      </section>
+      </section>}
 
       <section id="plano" style={{ marginTop: 24 }}>
         <h2>Plano de 7 dias</h2>
@@ -305,11 +323,13 @@ export function MapPage() {
         <p className="small">{map.common.howToEnter}</p>
       </div>
 
-      {!interest && (
+      {!interest && (map.broadProfile ? (
         <button className="btn secondary no-print" style={{ marginBottom: 12 }} onClick={markInterest} disabled={interestBusy}>
           Tenho interesse em receber um trajeto/diagnóstico
         </button>
-      )}
+      ) : (
+        <a className="btn secondary no-print" style={{ marginBottom: 12 }} href="#diagnostico">Ver meu Diagnóstico de {map.cards[0].name}</a>
+      ))}
       <button className="btn secondary no-print" onClick={printMap}>Salvar ou imprimir</button>
       <p className="small muted" style={{ marginTop: 12 }}>
         Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>. Anote ou tire um print.

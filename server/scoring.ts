@@ -165,6 +165,8 @@ export type MapCard = {
   name: string;
   /** Afinidade 0–100 (scoring-v2). Ausente em mapas antigos. */
   match?: number;
+  /** Atividade que a carreira mais exige (ícone do card). */
+  dim?: Dimension;
   /** Respostas da própria pessoa que sustentam a sugestão. */
   evidence?: string[];
   /** Resposta baixa da pessoa em algo que a carreira exige. */
@@ -222,6 +224,7 @@ export function computeResult(answers: Answers, context: QuizContext): ComputedR
       position: i + 1,
       name: c.name,
       match: Math.round(r.affinity),
+      dim: demandedDims(c)[0] ?? topDims(careerVector(c), 1)[0],
       evidence: evidenceFor(answers, c, quoted),
       tension: tensionFor(answers, c),
       reasons: [
