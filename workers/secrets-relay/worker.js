@@ -1,12 +1,13 @@
 // Cloudflare Worker "mapa-da-carreira-relay": guarda os segredos fora do site.
-// Hoje: repassa eventos à API de Conversões da Meta (o token fica só aqui).
-// Depois: Mercado Pago, na mesma estrutura (nova rota, novo segredo).
+// - /meta/events: repassa eventos à API de Conversões da Meta (token da Meta fica só aqui).
+// - /mp/api: chamadas ao Mercado Pago (Access Token fica só aqui), limitadas às 3 operações do Pix.
 //
 // Variáveis do Worker (Settings → Variables and Secrets):
 //   RELAY_SECRET          (secret)  mesmo valor de META_RELAY_SECRET no Netlify
 //   META_CAPI_TOKEN       (secret)  token da API de Conversões
 //   META_PIXEL_ID         (texto)   287406024051977
 //   META_TEST_EVENT_CODE  (texto, opcional) para ver os eventos em "Testar eventos"
+//   MP_ACCESS_TOKEN       (secret)  Access Token de PRODUÇÃO do Mercado Pago
 //
 // O site assina cada pedido: x-mc-timestamp (segundos) e
 // x-mc-signature = HMAC-SHA256(RELAY_SECRET, `${timestamp}.${corpo}`) em hex.
@@ -21,10 +22,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/health' && request.method === 'GET') {
-      return json(200, { ok: true, meta_configured: Boolean(env.META_CAPI_TOKEN && env.META_PIXEL_ID && env.RELAY_SECRET) });
+      return json(200, {
+        ok: true,
+        meta_configured: Boolean(env.META_CAPI_TOKEN && env.META_PIXEL_ID && env.RELAY_SECRET),
+        mp_configured: Boolean(env.MP_ACCESS_TOKEN && env.RELAY_SECRET),
+      });
     }
     if (request.method !== 'POST') return json(405, { error: 'method_not_allowed' });
     if (url.pathname === '/meta/events') return metaEvents(request, env);
+    if (url.pathname === '/mp/api') return mpApi(request, env);
     return json(404, { error: 'not_found' });
   },
 };
@@ -66,6 +72,52 @@ async function metaEvents(request, env) {
   // Só o essencial volta ao site; nunca o token.
   const out = { ok: res.ok, status: res.status, events_received: meta?.events_received, fbtrace_id: meta?.fbtrace_id, error: meta?.error?.message };
   return json(res.ok ? 200 : 502, out);
+}
+
+// Só o que o Pix do site usa: criar order, consultar order e cancelar order.
+const MP_ROUTES = [
+  { method: 'POST', re: /^\/v1\/orders$/ },
+  { method: 'GET', re: /^\/v1\/orders\/[A-Za-z0-9_-]{1,64}$/ },
+  { method: 'POST', re: /^\/v1\/orders\/[A-Za-z0-9_-]{1,64}\/cancel$/ },
+];
+
+async function mpApi(request, env) {
+  if (!env.RELAY_SECRET || !env.MP_ACCESS_TOKEN) return json(503, { error: 'not_configured' });
+  const raw = await request.text();
+  if (raw.length > MAX_BODY_BYTES) return json(413, { error: 'too_large' });
+  if (!(await verifySignature(request, raw, env.RELAY_SECRET))) return json(401, { error: 'bad_signature' });
+  let req;
+  try {
+    req = JSON.parse(raw);
+  } catch {
+    return json(400, { error: 'invalid_json' });
+  }
+  const method = String(req?.method || '').toUpperCase();
+  const path = String(req?.path || '');
+  if (!MP_ROUTES.some((r) => r.method === method && r.re.test(path))) return json(403, { error: 'route_not_allowed' });
+
+  const headers = { Authorization: `Bearer ${env.MP_ACCESS_TOKEN}` };
+  if (typeof req.idempotency_key === 'string' && req.idempotency_key) headers['X-Idempotency-Key'] = req.idempotency_key.slice(0, 120);
+  let body;
+  if (method === 'POST' && req.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(req.body);
+  }
+  let res;
+  try {
+    res = await fetch(`https://api.mercadopago.com${path}`, { method, headers, body });
+  } catch (e) {
+    return json(502, { error: 'mp_unreachable' });
+  }
+  const text = await res.text();
+  let parsed = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = { raw: text.slice(0, 500) };
+  }
+  // Devolve a resposta do Mercado Pago como veio (status + corpo); o token nunca sai daqui.
+  return json(200, { status: res.status, body: parsed });
 }
 
 async function verifySignature(request, raw, secret) {

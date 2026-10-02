@@ -181,14 +181,14 @@ describe('modo gratuito', () => {
     expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, want: 'hack' })).status).toBe(400);
     await c.req('POST', '/api/interest', { result_id: r.body.result_id });
     expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, want: 'roteiro' })).body.detail).toEqual({ want: 'roteiro' });
-    expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, price: 'ate50' })).body.detail).toEqual({ want: 'roteiro', price: 'ate50' });
-    expect((await c.req('GET', `/api/results/${r.body.result_id}/full`)).body.interest_detail).toEqual({ want: 'roteiro', price: 'ate50' });
+    expect((await c.req('POST', '/api/interest/details', { result_id: r.body.result_id, price: 'ate50' })).status).toBe(400);
+    expect((await c.req('GET', `/api/results/${r.body.result_id}/full`)).body.interest_detail).toEqual({ want: 'roteiro' });
     // Outro visitante não consegue responder pelo mapa alheio.
     const intruso = new Client(app);
-    expect((await intruso.req('POST', '/api/interest/details', { result_id: r.body.result_id, price: 'gratis' })).status).toBe(403);
+    expect((await intruso.req('POST', '/api/interest/details', { result_id: r.body.result_id, want: 'cursos' })).status).toBe(403);
     const adm = new Client(app);
     await adm.req('POST', '/api/admin/login', { password: 'adm' });
     const leads = (await adm.req('GET', '/api/admin/leads')).body.leads;
-    expect(leads[0].interest_detail).toEqual({ want: 'roteiro', price: 'ate50' });
+    expect(leads[0].interest_detail).toEqual({ want: 'roteiro' });
   });
 });

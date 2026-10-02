@@ -6,7 +6,7 @@
 import type { AppConfig } from './config';
 import { maskForDisplay } from '../shared/phone';
 
-export type AccessMessage = { to: string; name: string; link: string; kind: 'purchase' | 'recover' | 'free' };
+export type AccessMessage = { to: string; name: string; link: string; kind: 'purchase' | 'recover' | 'free' | 'diagnostic' };
 export type MessageSender = { enabled: boolean; send(msg: AccessMessage): Promise<void> };
 
 export const sentMessages: AccessMessage[] = []; // inspeção em dev/testes
@@ -14,6 +14,7 @@ export const sentMessages: AccessMessage[] = []; // inspeção em dev/testes
 export function accessText(m: Omit<AccessMessage, 'to'>, support: string): string {
   const intro =
     m.kind === 'purchase' ? 'seu pagamento foi confirmado e seu Mapa da Carreira está pronto.'
+      : m.kind === 'diagnostic' ? 'seu pagamento foi confirmado e seu Diagnóstico de Carreira está pronto.'
       : m.kind === 'free' ? 'seu Mapa da Carreira está pronto. Guarde este link para abrir quando quiser.'
         : 'aqui está seu link de acesso ao Mapa da Carreira.';
   return `Olá, ${m.name}! ${intro}\n\nAbra pelo link (uso único):\n${m.link}\n\nDúvidas: ${support}`;

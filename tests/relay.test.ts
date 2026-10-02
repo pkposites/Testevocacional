@@ -49,7 +49,7 @@ describe('Worker da Cloudflare (token da Meta)', () => {
     expect((await worker.fetch(signed({ data: [ev()] }), { ...ENV, META_CAPI_TOKEN: '' })).status).toBe(503);
     expect(graph).toHaveLength(0);
     const health = await worker.fetch(new Request(`${RELAY}/health`), ENV);
-    expect(await health.json()).toEqual({ ok: true, meta_configured: true });
+    expect(await health.json()).toEqual({ ok: true, meta_configured: true, mp_configured: false });
   });
 });
 
@@ -79,5 +79,58 @@ describe('site → Worker', () => {
     await c.req('PUT', '/api/quiz/sessions/me', { answers: analyticAnswers(), context: { moment: 'change', dailyTime: 15 } });
     await c.req('POST', '/api/results', { consent: 'denied' });
     expect(graph).toHaveLength(0);
+  });
+});
+
+describe('Mercado Pago pelo Worker (token só na Cloudflare)', () => {
+  const MP_ENV = { ...ENV, MP_ACCESS_TOKEN: 'APP_USR-token-secreto' };
+  const order = {
+    id: 'ORD01TESTE', external_reference: '11111111-2222-3333-4444-555555555555', status: 'action_required', status_detail: 'waiting_transfer',
+    total_amount: '29.90', currency: 'BRL', user_id: '123',
+    transactions: { payments: [{ id: 'PAY1', status: 'action_required', amount: '29.90', date_of_expiration: '2026-10-03T12:00:00.000-03:00',
+      payment_method: { id: 'pix', type: 'bank_transfer', qr_code: '000201pix', qr_code_base64: 'iVBOR', ticket_url: 'https://mp/t' } }] },
+  };
+  let mpCalls: { url: string; init: RequestInit }[];
+  beforeEach(() => {
+    mpCalls = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      mpCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify(order), { status: String(url).endsWith('/cancel') ? 200 : 201 });
+    });
+  });
+
+  it('cria, consulta e cancela o Pix pelo Worker; o site não tem o token', async () => {
+    const { loadConfig } = await import('../server/config');
+    const { createMercadoPago } = await import('../server/payments/mercadopago');
+    const cfg = loadConfig({ APP_ENV: 'test', PAYMENT_PROVIDER: 'mercadopago', MP_WEBHOOK_SECRET: 's', MP_RELAY: '1', META_RELAY_URL: RELAY, META_RELAY_SECRET: ENV.RELAY_SECRET });
+    expect(cfg.mp.accessToken).toBeUndefined();
+    const mp = createMercadoPago(cfg, (async (url: string, init: RequestInit) => worker.fetch(new Request(url, init), MP_ENV)) as any);
+    const r = await mp.createCheckout({ orderId: order.external_reference, publicRef: 'DG-X', attempt: 1, amountCents: 2990, buyerPhone: '5511987654321', buyerName: 'Ana', description: 'Diagnóstico', attribution: {} });
+    expect(r.kind === 'pix' && r.state.pix?.qrCode).toBe('000201pix');
+    expect(mpCalls[0].url).toBe('https://api.mercadopago.com/v1/orders');
+    const h = mpCalls[0].init.headers as Record<string, string>;
+    expect(h.Authorization).toBe('Bearer APP_USR-token-secreto');
+    expect(h['X-Idempotency-Key']).toBe(`${order.external_reference}-1`);
+    expect(JSON.parse(String(mpCalls[0].init.body)).total_amount).toBe('29.90');
+    expect((await mp.fetchState('ORD01TESTE'))?.status).toBe('pending');
+    expect(mpCalls[1].url).toBe('https://api.mercadopago.com/v1/orders/ORD01TESTE');
+    await mp.cancel!('ORD01TESTE');
+    expect(mpCalls[2].url).toBe('https://api.mercadopago.com/v1/orders/ORD01TESTE/cancel');
+  });
+
+  it('Worker recusa rotas fora da lista e pedidos sem assinatura', async () => {
+    const req = (b: unknown, secret = ENV.RELAY_SECRET) => {
+      const raw = JSON.stringify(b); const ts = Math.floor(Date.now() / 1000);
+      return new Request(`${RELAY}/mp/api`, { method: 'POST', headers: { 'x-mc-timestamp': String(ts), 'x-mc-signature': hmacHex('sha256', secret, `${ts}.${raw}`) }, body: raw });
+    };
+    expect((await worker.fetch(req({ method: 'GET', path: '/v1/payments/search?x=1' }), MP_ENV)).status).toBe(403);
+    expect((await worker.fetch(req({ method: 'DELETE', path: '/v1/orders/ORD1' }), MP_ENV)).status).toBe(403);
+    expect((await worker.fetch(req({ method: 'GET', path: '/v1/orders/ORD1' }, 'errado'), MP_ENV)).status).toBe(401);
+    expect((await worker.fetch(req({ method: 'GET', path: '/v1/orders/ORD1' }), { ...MP_ENV, MP_ACCESS_TOKEN: '' })).status).toBe(503);
+    expect(mpCalls).toHaveLength(0);
+    const ok = await worker.fetch(req({ method: 'GET', path: '/v1/orders/ORD1' }), MP_ENV);
+    const out = await ok.json();
+    expect(out.status).toBe(201);
+    expect(JSON.stringify(out)).not.toContain('APP_USR-token-secreto');
   });
 });

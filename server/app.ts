@@ -8,9 +8,10 @@ import { ProviderNetworkError, type ProviderPaymentState } from './payments/type
 import { buildAnalytics, parseRange } from './analytics';
 import { applyProviderState } from './reconcile';
 import { computeResult, type ResultSnapshot } from './scoring';
+import { buildDiagnostic } from './diagnostic';
 import { normalizeBrPhone } from '../shared/phone';
 import { eventIds } from '../shared/events';
-import { accessLink, afterApply, drainOutbox, rateLimit, reconcilePayment, sendMetaEvent, type App } from './services';
+import { accessLink, afterApply, DIAGNOSTIC_PREFIX, drainOutbox, isDiagnosticRef, MAP_ONLY, rateLimit, reconcilePayment, sendMetaEvent, type App } from './services';
 import { accessText } from './whatsapp';
 
 const S_COOKIE = 'mc_s';
@@ -189,6 +190,8 @@ route('GET', '/api/config', async (app, ctx) =>
     dev_tools: app.cfg.paymentProvider === 'fake' && app.cfg.env !== 'production',
     whatsapp_auto: app.messages.enabled,
     offer_mode: app.cfg.offerMode,
+    diagnostic_mode: app.cfg.diagnosticMode,
+    diagnostic_price_cents: app.cfg.diagnosticPriceCents,
   }),
 );
 
@@ -211,11 +214,11 @@ async function sessionView(app: App, s: any) {
   const result = await one(app.db, 'select id, snapshot from results where session_id = $1 and answer_revision = $2', [s.id, s.answer_revision]);
   const paid = await one(
     app.db,
-    `select o.id, o.result_id from orders o join entitlements e on e.order_id = o.id and e.state = 'active' where o.session_id = $1 order by o.paid_at desc limit 1`,
+    `select o.id, o.result_id from orders o join entitlements e on e.order_id = o.id and e.state = 'active' where o.session_id = $1 and ${MAP_ONLY('o')} order by o.paid_at desc limit 1`,
     [s.id],
   );
   const openOrder = result
-    ? await one(app.db, `select id, status from orders where result_id = $1 and status in ('created','pending','expired','cancelled') order by created_at desc limit 1`, [result.id])
+    ? await one(app.db, `select id, status from orders where result_id = $1 and ${MAP_ONLY()} and status in ('created','pending','expired','cancelled') order by created_at desc limit 1`, [result.id])
     : undefined;
   return {
     session_id: s.id,
@@ -328,10 +331,10 @@ route('POST', '/api/results', async (app, ctx) => {
 
 // ---------- pedidos e checkout ----------
 
-function publicRef() {
+function publicRef(prefix = 'MC-') {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const b = randomBytes(6);
-  return 'MC-' + [...b].map((x) => alphabet[x % alphabet.length]).join('');
+  return prefix + [...b].map((x) => alphabet[x % alphabet.length]).join('');
 }
 
 async function orderView(app: App, order: any) {
@@ -344,8 +347,9 @@ async function orderView(app: App, order: any) {
   const pixExpired = !!pay && pay.normalized_status === 'pending' && pay.expires_at && new Date(pay.expires_at).getTime() < now;
   let status: string = order.status;
   if (status === 'pending' && pixExpired) status = 'expired';
+  const diagnostic = isDiagnosticRef(order.public_ref);
   const next_action =
-    status === 'paid' ? 'open_map'
+    status === 'paid' ? (diagnostic ? 'open_diagnostic' : 'open_map')
       : status === 'refunded' || status === 'disputed' ? 'contact_support'
         : status === 'expired' || status === 'cancelled' ? 'retry'
           : app.cfg.paymentProvider === 'kiwify' ? 'redirect' : 'pay_pix';
@@ -354,6 +358,7 @@ async function orderView(app: App, order: any) {
     order_id: order.id,
     public_ref: order.public_ref,
     result_id: order.result_id,
+    product: diagnostic ? 'diagnostic' : 'map',
     status,
     next_action: reviewHold ? 'contact_support' : next_action,
     amount_cents: order.amount_cents,
@@ -394,7 +399,7 @@ async function ensureCheckout(app: App, order: any, forceNew = false): Promise<v
       amountCents: order.amount_cents,
       buyerPhone: order.buyer_phone,
       buyerName: order.buyer_name,
-      description: 'Mapa da Carreira — 5 caminhos e plano de 7 dias',
+      description: isDiagnosticRef(order.public_ref) ? 'Diagnóstico de Carreira — plano de 4 semanas' : 'Mapa da Carreira — 5 caminhos e plano de 7 dias',
       attribution: order.attribution ?? {},
     });
   } catch (e) {
@@ -439,10 +444,10 @@ route('POST', '/api/orders', async (app, ctx) => {
   const idemKey = ctx.req.headers.get('idempotency-key')?.slice(0, 100) || null;
 
   // Pedido pago para este resultado: não recriar.
-  let order = await one(app.db, `select * from orders where result_id = $1 and status in ('paid','refunded','disputed') order by created_at limit 1`, [resultId]);
+  let order = await one(app.db, `select * from orders where result_id = $1 and ${MAP_ONLY()} and status in ('paid','refunded','disputed') order by created_at limit 1`, [resultId]);
   if (!order && idemKey) order = await one(app.db, 'select * from orders where idempotency_key = $1 and session_id = $2', [idemKey, s.id]);
   if (!order) {
-    order = await one(app.db, `select * from orders where result_id = $1 and status in ('created','pending','expired','cancelled') order by created_at desc limit 1`, [resultId]);
+    order = await one(app.db, `select * from orders where result_id = $1 and ${MAP_ONLY()} and status in ('created','pending','expired','cancelled') order by created_at desc limit 1`, [resultId]);
     if (order && (order.buyer_phone !== phone || order.buyer_name !== name)) {
       order = await one(app.db, `update orders set buyer_phone = $2, buyer_name = $3, marketing_opt_in = $4, updated_at = now() where id = $1 returning *`,
         [order.id, phone, name, !!body.marketing_opt_in]);
@@ -529,7 +534,7 @@ route('POST', '/api/leads', async (app, ctx) => {
   const attribution = { ...s.attribution, ...trackingContext(ctx, body) };
   let created = false;
   const order = await app.db.tx(async (t) => {
-    const existing = await one(t, `select * from orders where result_id = $1 order by created_at limit 1 for update`, [resultId]);
+    const existing = await one(t, `select * from orders where result_id = $1 and ${MAP_ONLY()} order by created_at limit 1 for update`, [resultId]);
     if (existing) {
       return one(t, `update orders set buyer_name = $2, buyer_phone = $3, public_name_ok = $4, contact_consent = true, updated_at = now() where id = $1 returning *`,
         [existing.id, name, phone, publicNameOk]);
@@ -575,17 +580,14 @@ route('POST', '/api/interest', async (app, ctx) => {
 });
 
 export const INTEREST_WANTS = ['roteiro', 'cursos', 'vagas', 'mentoria'] as const;
-export const INTEREST_PRICES = ['gratis', 'ate20', 'ate50', 'ate100', 'mais100'] as const;
 
-/** Validação da oferta paga: o que mais ajudaria e quanto a pessoa pagaria (uma resposta por lead, pode trocar). */
+/** O que mais ajudaria a pessoa no diagnóstico (uma resposta por lead, pode trocar). */
 route('POST', '/api/interest/details', async (app, ctx) => {
   const body = await readJson(ctx);
   const ent = await authorizeResult(app, ctx, String(body.result_id ?? ''));
   const want = INTEREST_WANTS.includes(body.want) ? body.want : null;
-  const price = INTEREST_PRICES.includes(body.price) ? body.price : null;
-  if (!want && !price) throw new ApiError(400, 'invalid_details', 'Escolha uma opção.');
-  const prev = await one(app.db, `select attribution from events where event_id = $1`, [`interestdetail_${ent.order_id}`]);
-  const detail = { ...(prev?.attribution ?? {}), ...(want ? { want } : {}), ...(price ? { price } : {}) };
+  if (!want) throw new ApiError(400, 'invalid_details', 'Escolha uma opção.');
+  const detail = { want };
   await app.db.query(
     `insert into events (event_id, order_id, name, attribution, consent_state) values ($1,$2,'InterestDetail',$3::jsonb,'unknown')
      on conflict (event_id) do update set attribution = excluded.attribution`,
@@ -601,7 +603,7 @@ route('GET', '/api/social-proof', async (app, ctx) => {
     `select o.buyer_name, o.public_name_ok, r.snapshot->'cards'->0->>'name' as career,
        extract(epoch from (now() - o.created_at)) / 60 as minutes
      from orders o join results r on r.id = o.result_id
-     where o.status in ('paid','refunded','disputed') and o.created_at > now() - interval '72 hours'
+     where o.status in ('paid','refunded','disputed') and ${MAP_ONLY('o')} and o.created_at > now() - interval '72 hours'
      order by o.created_at desc limit 8`,
   );
   const today = await one<{ n: number }>(app.db,
@@ -674,7 +676,7 @@ route('POST', '/api/access/recover', async (app, ctx) => {
   const rawRef = String(body.order_ref ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (rawRef) {
     // WhatsApp + código do pedido: abre o acesso direto, sem depender de mensagem.
-    const ref = `MC-${rawRef.replace(/^MC/, '')}`;
+    const ref = rawRef.startsWith('DG') && rawRef.length === 8 ? `${DIAGNOSTIC_PREFIX}${rawRef.slice(2)}` : `MC-${rawRef.replace(/^MC/, '')}`;
     const ent = await one(
       app.db,
       `select e.id from entitlements e join orders o on o.id = e.order_id where e.buyer_phone = $1 and o.public_ref = $2 and e.state = 'active'`,
@@ -715,11 +717,14 @@ route('POST', '/api/access/exchange', async (app, ctx) => {
 
 async function listMaps(app: App, phone: string) {
   const rows = await app.db.query(
-    `select e.result_id, o.public_ref, o.paid_at from entitlements e join orders o on o.id = e.order_id
-     where e.buyer_phone = $1 and e.state = 'active' order by o.paid_at desc`,
+    `select e.result_id, o.public_ref, o.paid_at,
+       exists (select 1 from entitlements d join orders od on od.id = d.order_id
+               where d.result_id = e.result_id and d.state = 'active' and od.public_ref like 'DG-%') as diagnostic
+     from entitlements e join orders o on o.id = e.order_id
+     where e.buyer_phone = $1 and e.state = 'active' and ${MAP_ONLY('o')} order by o.paid_at desc`,
     [phone],
   );
-  return rows.map((r) => ({ result_id: r.result_id, public_ref: r.public_ref, paid_at: r.paid_at }));
+  return rows.map((r) => ({ result_id: r.result_id, public_ref: r.public_ref, paid_at: r.paid_at, diagnostic: !!r.diagnostic }));
 }
 
 route('GET', '/api/access/me', async (app, ctx) => {
@@ -743,7 +748,7 @@ async function authorizeResult(app: App, ctx: Ctx, resultId: string) {
   const ent = await one(
     app.db,
     `select e.*, o.session_id, o.buyer_name, o.public_ref from entitlements e join orders o on o.id = e.order_id
-     where e.result_id = $1 and e.state = 'active' order by e.created_at limit 1`,
+     where e.result_id = $1 and e.state = 'active' and ${MAP_ONLY('o')} order by e.created_at limit 1`,
     [resultId],
   );
   if (!ent) throw new ApiError(403, 'forbidden', 'Acesso não liberado para este mapa.');
@@ -771,11 +776,77 @@ route('GET', '/api/results/:id/full', async (app, ctx) => {
     offer_mode: app.cfg.offerMode,
     diagnostic_interest: !!(await one(app.db, 'select diagnostic_interest_at from orders where id = $1', [ent.order_id]))?.diagnostic_interest_at,
     interest_detail: (await one(app.db, `select attribution from events where event_id = $1`, [`interestdetail_${ent.order_id}`]))?.attribution ?? null,
+    diagnostic: await diagnosticState(app, ent.result_id),
     result_version: res!.result_version,
     content_version: res!.content_version,
     map: res!.snapshot,
     progress,
     reflections,
+  });
+});
+
+// ---------- Diagnóstico pago (pedido DG- sobre o mesmo resultado) ----------
+
+async function diagnosticState(app: App, resultId: string) {
+  const paid = await one(app.db,
+    `select o.id from orders o join entitlements e on e.order_id = o.id and e.state = 'active'
+     where o.result_id = $1 and o.public_ref like 'DG-%' order by o.paid_at limit 1`, [resultId]);
+  const open = paid ? undefined : await one(app.db,
+    `select id, status from orders where result_id = $1 and public_ref like 'DG-%' and status in ('created','pending','expired','cancelled')
+     order by created_at desc limit 1`, [resultId]);
+  return {
+    mode: app.cfg.diagnosticMode,
+    price_cents: app.cfg.diagnosticPriceCents,
+    purchased: !!paid,
+    open_order_id: open?.id ?? null,
+  };
+}
+
+route('POST', '/api/diagnostic/orders', async (app, ctx) => {
+  if (app.cfg.diagnosticMode !== 'paid') throw new ApiError(409, 'diagnostic_waitlist', 'O diagnóstico ainda não está à venda. Entre na lista para ser avisado.');
+  await limit(app, ctx, 'dg-orders', 20, 600);
+  const body = await readJson(ctx);
+  const ent = await authorizeResult(app, ctx, String(body.result_id ?? ''));
+  const mapOrder = await one(app.db, 'select * from orders where id = $1', [ent.order_id]);
+  // Já comprado: devolve o pedido pago (o front abre o diagnóstico).
+  let order = await one(app.db,
+    `select * from orders where result_id = $1 and public_ref like 'DG-%' and status in ('paid','refunded','disputed') order by created_at limit 1`, [ent.result_id]);
+  if (!order) {
+    order = await one(app.db,
+      `select * from orders where result_id = $1 and public_ref like 'DG-%' and status in ('created','pending','expired','cancelled') order by created_at desc limit 1`, [ent.result_id]);
+    // Preço mudou e não há Pix em aberto: o próximo Pix sai com o valor atual.
+    if (order && order.amount_cents !== app.cfg.diagnosticPriceCents && order.status !== 'pending') {
+      order = await one(app.db, `update orders set amount_cents = $2, updated_at = now() where id = $1 returning *`, [order.id, app.cfg.diagnosticPriceCents]);
+    }
+  }
+  if (!order) {
+    const attribution = { ...(mapOrder!.attribution ?? {}), ...trackingContext(ctx, body) };
+    order = await one(
+      app.db,
+      `insert into orders (public_ref, result_id, session_id, provider, amount_cents, currency, buyer_name, buyer_phone, marketing_opt_in, contact_consent, attribution)
+       values ($1,$2,$3,$4,$5,'BRL',$6,$7,$8,$9,$10::jsonb) returning *`,
+      [publicRef(DIAGNOSTIC_PREFIX), ent.result_id, mapOrder!.session_id, app.cfg.paymentProvider, app.cfg.diagnosticPriceCents,
+        mapOrder!.buyer_name, mapOrder!.buyer_phone, !!mapOrder!.marketing_opt_in, !!mapOrder!.contact_consent, JSON.stringify(attribution)],
+    );
+  }
+  await ensureCheckout(app, order);
+  order = await one(app.db, 'select * from orders where id = $1', [order!.id]);
+  await recordEvent(app, { eventId: `ic_${order!.id}`, name: 'InitiateCheckout', sessionId: order!.session_id, orderId: order!.id, attribution: order!.attribution });
+  return json(ctx, 200, await orderView(app, order));
+});
+
+route('GET', '/api/diagnostic/:id', async (app, ctx) => {
+  const ent = await authorizeResult(app, ctx, ctx.params.id);
+  const st = await diagnosticState(app, ent.result_id);
+  if (!st.purchased) throw new ApiError(402, 'diagnostic_not_purchased', 'O diagnóstico deste mapa ainda não foi liberado.');
+  const res = await one(app.db, 'select snapshot, answers from results where id = $1', [ent.result_id]);
+  const careerId = ctx.url.searchParams.get('career') ?? ent.selected_career_id ?? undefined;
+  const snapshot = res!.snapshot as ResultSnapshot;
+  return json(ctx, 200, {
+    result_id: ent.result_id,
+    buyer_first_name: String(ent.buyer_name).split(' ')[0],
+    cards: snapshot.cards.map((c) => ({ careerId: c.careerId, name: c.name, match: c.match ?? null })),
+    diagnostic: buildDiagnostic(snapshot, res!.answers, careerId),
   });
 });
 
@@ -952,7 +1023,7 @@ route('GET', '/api/admin/leads', async (app, ctx) => {
        (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done,
        (select ev.attribution from events ev where ev.event_id = 'interestdetail_' || o.id) as interest_detail
      from orders o join results r on r.id = o.result_id
-     where o.provider = 'free' ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
+     where o.provider = 'free' and ${MAP_ONLY('o')} ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
      order by coalesce(o.diagnostic_interest_at, o.created_at) desc limit 1000`,
   );
   return json(ctx, 200, { leads: rows });

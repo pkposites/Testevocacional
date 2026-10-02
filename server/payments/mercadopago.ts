@@ -106,25 +106,59 @@ export function mpPayer(cfg: AppConfig, input: CreateCheckoutInput) {
 
 export function createMercadoPago(cfg: AppConfig, fetchImpl: typeof fetch = fetch): PaymentProvider {
   const base = cfg.mp.apiBase;
-  const auth = () => {
+  const viaRelay = !!(cfg.mp.relayUrl && cfg.mp.relaySecret);
+  const auth = (): Record<string, string> => {
+    if (viaRelay) return {}; // o Worker coloca o token
     if (!cfg.mp.accessToken) throw new Error('MP_ACCESS_TOKEN não configurado');
     return { Authorization: `Bearer ${cfg.mp.accessToken}` };
   };
 
+  /** Pelo Worker: o site assina o pedido e o Worker chama o Mercado Pago com o token. */
+  async function viaWorker(path: string, init: RequestInit): Promise<{ status: number; body: any }> {
+    const h = new Headers(init.headers);
+    const raw = JSON.stringify({
+      method: init.method ?? 'GET',
+      path,
+      body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
+      idempotency_key: h.get('X-Idempotency-Key') ?? undefined,
+    });
+    const ts = String(Math.floor(Date.now() / 1000));
+    const res = await fetchImpl(`${cfg.mp.relayUrl}/mp/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-mc-timestamp': ts, 'x-mc-signature': hmacHex('sha256', cfg.mp.relaySecret!, `${ts}.${raw}`) },
+      body: raw,
+      signal: AbortSignal.timeout(12_000),
+    });
+    const out: any = await res.json().catch(() => null);
+    if (!res.ok || !out || typeof out.status !== 'number') {
+      throw new ProviderNetworkError(`Worker do Mercado Pago respondeu ${res.status}: ${out?.error ?? 'sem detalhes'}`);
+    }
+    return out;
+  }
+
   async function call(path: string, init: RequestInit): Promise<any> {
-    let res: Response;
+    let status: number;
+    let body: any = undefined;
+    let text = '';
     try {
-      res = await fetchImpl(`${base}${path}`, { ...init, signal: AbortSignal.timeout(10_000) });
+      if (viaRelay) {
+        ({ status, body } = await viaWorker(path, init));
+        text = body ? JSON.stringify(body) : '';
+      } else {
+        const res = await fetchImpl(`${base}${path}`, { ...init, signal: AbortSignal.timeout(10_000) });
+        status = res.status;
+        text = await res.text();
+        try {
+          body = text ? JSON.parse(text) : undefined;
+        } catch {
+          /* corpo não-JSON */
+        }
+      }
     } catch (e) {
+      if (e instanceof ProviderNetworkError) throw e;
       throw new ProviderNetworkError(`Falha de rede com Mercado Pago: ${(e as Error).message}`);
     }
-    const text = await res.text();
-    let body: any = undefined;
-    try {
-      body = text ? JSON.parse(text) : undefined;
-    } catch {
-      /* corpo não-JSON */
-    }
+    const res = { status, ok: status >= 200 && status < 300 };
     if (res.status === 404) return null;
     if (!res.ok) {
       const msg = body?.errors?.[0]?.message ?? body?.message ?? text.slice(0, 200);

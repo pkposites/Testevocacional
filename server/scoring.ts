@@ -62,7 +62,7 @@ export function isBroadProfile(answers: Answers, u: UserVector): boolean {
 }
 
 /** Ordena dimensões por valor decrescente; empate pela ordem fixa P,A,C,S,N,O. */
-function topDims(values: Record<Dimension, number>, n: number): Dimension[] {
+export function topDims(values: Record<Dimension, number>, n: number): Dimension[] {
   const r = (x: number) => Math.round(x * 1e9);
   return [...DIMENSIONS]
     .sort((a, b) => r(values[b]) - r(values[a]) || DIMENSIONS.indexOf(a) - DIMENSIONS.indexOf(b))
@@ -124,7 +124,7 @@ const scaleLabel = (n: number) => SCALE.find((x) => x.value === n)?.label ?? Str
 const quote = (q: { text: string }, n: number) => `Você marcou “${scaleLabel(n)}” em “${q.text.replace(/\.$/, '')}”`;
 
 /** Dimensões que a carreira mais exige (vetor ≥ 4), da mais para a menos exigida. */
-function demandedDims(c: Career): Dimension[] {
+export function demandedDims(c: Career): Dimension[] {
   return [...DIMENSIONS].filter((d) => c.vector[d] >= 4).sort((a, b) => c.vector[b] - c.vector[a] || DIMENSIONS.indexOf(a) - DIMENSIONS.indexOf(b));
 }
 

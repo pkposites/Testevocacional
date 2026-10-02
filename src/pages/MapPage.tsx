@@ -18,7 +18,8 @@ type MapData = {
   selected_career_id: string | null;
   offer_mode: 'free' | 'paid';
   diagnostic_interest: boolean;
-  interest_detail?: { want?: string; price?: string } | null;
+  interest_detail?: { want?: string } | null;
+  diagnostic?: { mode: 'waitlist' | 'paid'; price_cents: number; purchased: boolean; open_order_id: string | null };
   map: {
     broadProfile: boolean;
     summary: { topDimensions: { id: string; label: string }[]; explanation: string };
@@ -156,7 +157,9 @@ export function MapPage() {
       {!map.broadProfile && map.cards[0] && (
         <a href="#diagnostico" className="diag-banner no-print">
           <SparkIcon size={16} />
-          <span>{interest ? <>Você está na lista do <strong>Diagnóstico de {map.cards[0].name}</strong></> : <>Seu <strong>Diagnóstico de {map.cards[0].name}</strong> está em preparação. Ver o que vem nele</>}</span>
+          <span>{data.diagnostic?.purchased ? <>Seu <strong>Diagnóstico de {map.cards[0].name}</strong> está liberado. Abrir</>
+            : data.diagnostic?.mode === 'paid' ? <>Libere seu <strong>Diagnóstico de {map.cards[0].name}</strong>: o plano de 4 semanas feito com as suas respostas</>
+            : interest ? <>Você está na lista do <strong>Diagnóstico de {map.cards[0].name}</strong></> : <>Seu <strong>Diagnóstico de {map.cards[0].name}</strong> está em preparação. Ver o que vem nele</>}</span>
         </a>
       )}
       {map.profile && (
@@ -227,7 +230,7 @@ export function MapPage() {
         {idx === 0 && !map.broadProfile && (
           <DiagnosticOffer
             resultId={data.result_id} first={c} second={map.cards[1]} context={map.context}
-            firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail}
+            firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail} diagnostic={data.diagnostic}
             onInterested={() => setInterest(true)}
           />
         )}

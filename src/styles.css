@@ -316,3 +316,19 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .sample-card .sc-name svg { color: var(--accent-dark); }
 .sample-card .sc-why { font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
 .diag-after .status { align-items: flex-start; font-weight: 600; } .diag-ok-icon { flex: 0 0 20px; margin-top: 1px; }
+
+/* Diagnóstico pago */
+.dg-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 14px; }
+.dg-stats div { background: var(--title); color: #fff; border-radius: 12px; padding: 10px; text-align: center; }
+.dg-stats strong { display: block; font-size: 1.15rem; }
+.dg-stats span { font-size: 0.75rem; opacity: 0.85; }
+.dg-list { list-style: none; padding: 0; margin: 6px 0 12px; display: grid; gap: 8px; }
+.dg-list li { display: flex; gap: 10px; align-items: flex-start; font-size: 0.95rem; line-height: 1.4; }
+.dg-list.bad .x { flex: 0 0 16px; font-weight: 800; color: #b42318; text-align: center; }
+.dg-terms { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 6px 0 12px; }
+.dg-terms li { font-size: 0.85rem; padding: 6px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-dark); }
+.dg-progress { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin: 0 0 12px; }
+.dg-progress span { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+.dg-path.regulada { background: #fef3f2; color: #b42318; }
+.diag-page select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); max-width: 100%; }
+.dg-week .days { list-style: none; padding: 0; margin: 0; } .dg-week .days li:last-child .day { border-bottom: 0; }

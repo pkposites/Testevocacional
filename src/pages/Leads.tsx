@@ -5,21 +5,20 @@ import { api } from '../api';
 type Lead = {
   id: string; public_ref: string; buyer_name: string; buyer_phone: string; created_at: string; diagnostic_interest_at: string | null;
   public_name_ok: boolean; career: string; moment: string | null; daily_time: string | null; utm_content: string | null; utm_term: string | null; days_done: number;
-  interest_detail?: { want?: string; price?: string } | null;
+  interest_detail?: { want?: string } | null;
 };
 
 const WANT: Record<string, string> = { roteiro: 'Roteiro passo a passo', cursos: 'Cursos que valem a pena', vagas: 'Primeiras oportunidades', mentoria: 'Conversar com profissional' };
-const PRICE: Record<string, string> = { gratis: 'Só grátis', ate20: 'Até R$ 20', ate50: 'Até R$ 50', ate100: 'Até R$ 100', mais100: 'Mais de R$ 100' };
-const PRICE_ORDER = ['gratis', 'ate20', 'ate50', 'ate100', 'mais100'];
+
 
 const MOMENT: Record<string, string> = { first: 'Primeira área', change: 'Mudar de área', explore: 'Explorar sem sair' };
 const dt = (v: string | null) => (v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 function csv(rows: Lead[]) {
-  const head = ['data', 'nome', 'whatsapp', 'codigo', 'primeiro_caminho', 'momento', 'tempo_dia', 'interesse_diagnostico', 'quer', 'pagaria', 'dias_plano', 'anuncio', 'conjunto'];
+  const head = ['data', 'nome', 'whatsapp', 'codigo', 'primeiro_caminho', 'momento', 'tempo_dia', 'interesse_diagnostico', 'quer', 'dias_plano', 'anuncio', 'conjunto'];
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = rows.map((l) => [dt(l.created_at), l.buyer_name, `+${l.buyer_phone}`, l.public_ref, l.career, MOMENT[l.moment ?? ''] ?? '', l.daily_time ?? '',
-    l.diagnostic_interest_at ? dt(l.diagnostic_interest_at) : 'não', WANT[l.interest_detail?.want ?? ''] ?? '', PRICE[l.interest_detail?.price ?? ''] ?? '', l.days_done, l.utm_content ?? '', l.utm_term ?? ''].map(esc).join(';'));
+    l.diagnostic_interest_at ? dt(l.diagnostic_interest_at) : 'não', WANT[l.interest_detail?.want ?? ''] ?? '', l.days_done, l.utm_content ?? '', l.utm_term ?? ''].map(esc).join(';'));
   return '﻿' + [head.join(';'), ...lines].join('\n');
 }
 
@@ -45,9 +44,7 @@ export function Leads() {
 
   const total = leads?.length ?? 0;
   const interested = leads?.filter((l) => l.diagnostic_interest_at).length ?? 0;
-  // Quanto pagariam: base para definir o preço da versão paga.
-  const priceCounts = PRICE_ORDER.map((k) => ({ k, n: leads?.filter((l) => l.interest_detail?.price === k).length ?? 0 }));
-  const priced = priceCounts.reduce((s, x) => s + x.n, 0);
+
   return (
     <div>
       <div className="viz-toolbar">
@@ -61,17 +58,11 @@ export function Leads() {
       {!leads ? <div className="spinner dark" /> : (
         <>
           <p className="small muted">{total} lead(s){!onlyInterest && ` · ${interested} com interesse no diagnóstico`}. Mostrando os 1.000 mais recentes.</p>
-          {priced > 0 && (
-            <div className="card soft" style={{ padding: 12 }}>
-              <div className="small" style={{ fontWeight: 700, marginBottom: 6 }}>Quanto investiriam no diagnóstico ({priced} resposta{priced > 1 ? 's' : ''})</div>
-              <div className="small">{priceCounts.map((x) => `${PRICE[x.k]}: ${x.n} (${Math.round((100 * x.n) / priced)}%)`).join(' · ')}</div>
-            </div>
-          )}
           <div className="viz-table-wrap">
             <table className="admin">
-              <thead><tr><th>Data</th><th>Nome</th><th>WhatsApp</th><th>1º caminho</th><th>Momento</th><th>Interesse</th><th>Quer</th><th>Pagaria</th><th>Plano</th><th>Anúncio</th></tr></thead>
+              <thead><tr><th>Data</th><th>Nome</th><th>WhatsApp</th><th>1º caminho</th><th>Momento</th><th>Interesse</th><th>Quer</th><th>Plano</th><th>Anúncio</th></tr></thead>
               <tbody>
-                {leads.length === 0 && <tr><td colSpan={10} className="muted">Nenhum lead ainda.</td></tr>}
+                {leads.length === 0 && <tr><td colSpan={9} className="muted">Nenhum lead ainda.</td></tr>}
                 {leads.map((l) => (
                   <tr key={l.id}>
                     <td>{dt(l.created_at)}</td>
@@ -81,7 +72,6 @@ export function Leads() {
                     <td>{MOMENT[l.moment ?? ''] ?? '—'}</td>
                     <td>{l.diagnostic_interest_at ? <strong style={{ color: '#006300' }}>Sim · {dt(l.diagnostic_interest_at)}</strong> : 'Não'}</td>
                     <td>{WANT[l.interest_detail?.want ?? ''] ?? '—'}</td>
-                    <td>{PRICE[l.interest_detail?.price ?? ''] ?? '—'}</td>
                     <td>{l.days_done}/7</td>
                     <td>{l.utm_content ?? '(direto)'}</td>
                   </tr>

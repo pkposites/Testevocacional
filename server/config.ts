@@ -8,6 +8,9 @@ export type AppConfig = {
   deliveryMode: 'automatic' | 'manual';
   manualDeliverySla: string;
   priceCents: number;
+  /** Diagnóstico (produto pago depois do mapa): waitlist = só lista de interesse; paid = cobra por Pix. */
+  diagnosticMode: 'waitlist' | 'paid';
+  diagnosticPriceCents: number;
   currency: 'BRL';
   appSecret: string;
   databaseUrl?: string;
@@ -18,6 +21,9 @@ export type AppConfig = {
     payerEmailTemplate?: string;
     pixExpirationMinutes: number;
     apiBase: string;
+    /** Worker da Cloudflare que guarda o Access Token (preferido ao token no site). */
+    relayUrl?: string;
+    relaySecret?: string;
   };
   kiwify: {
     checkoutUrl?: string;
@@ -50,6 +56,8 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
   if (env === 'production' && provider === 'fake') throw new Error('PAYMENT_PROVIDER=fake não é permitido em produção');
   const priceCents = Number(e.PRODUCT_PRICE_CENTS ?? 1450);
   if (!Number.isInteger(priceCents) || priceCents <= 0) throw new Error('PRODUCT_PRICE_CENTS inválido');
+  const diagnosticPriceCents = Number(e.DIAGNOSTIC_PRICE_CENTS ?? 2990);
+  if (!Number.isInteger(diagnosticPriceCents) || diagnosticPriceCents <= 0) throw new Error('DIAGNOSTIC_PRICE_CENTS inválido');
   if ((e.CURRENCY ?? 'BRL') !== 'BRL') throw new Error('Somente BRL é suportado');
 
   const cfg: AppConfig = {
@@ -60,6 +68,8 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
     deliveryMode: (e.DELIVERY_MODE ?? 'automatic') as AppConfig['deliveryMode'],
     manualDeliverySla: e.MANUAL_DELIVERY_SLA ?? 'até 12 horas',
     priceCents,
+    diagnosticMode: e.DIAGNOSTIC_MODE === 'paid' ? 'paid' : 'waitlist',
+    diagnosticPriceCents,
     currency: 'BRL',
     appSecret: req(e.APP_SECRET, 'APP_SECRET', env) ?? 'dev-secret-not-for-production',
     databaseUrl: e.USE_NETLIFY_DB === '1' ? e.DATABASE_URL : req(e.DATABASE_URL, 'DATABASE_URL', env),
@@ -70,6 +80,9 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
       payerEmailTemplate: e.MP_PAYER_EMAIL_TEMPLATE,
       pixExpirationMinutes: Number(e.MP_PIX_EXPIRATION_MINUTES ?? 30),
       apiBase: e.MP_API_BASE ?? 'https://api.mercadopago.com',
+      // Mesmo Worker e mesma assinatura usados para a Meta (MP_RELAY=1 liga).
+      relayUrl: e.MP_RELAY === '1' ? (e.RELAY_URL ?? e.META_RELAY_URL)?.replace(/\/+$/, '') : undefined,
+      relaySecret: e.MP_RELAY === '1' ? e.RELAY_SECRET ?? e.META_RELAY_SECRET : undefined,
     },
     kiwify: {
       checkoutUrl: e.KIWIFY_CHECKOUT_URL,
@@ -108,8 +121,8 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
   if (env === 'production') {
     if (cfg.whatsapp.provider === 'log') throw new Error('WHATSAPP_PROVIDER=log não é permitido em produção');
     if (cfg.appSecret.length < 32) throw new Error('APP_SECRET precisa de pelo menos 32 caracteres');
-    if (provider === 'mercadopago' && (!cfg.mp.accessToken || !cfg.mp.webhookSecret)) {
-      throw new Error('MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET são obrigatórios com Mercado Pago');
+    if (provider === 'mercadopago' && (!(cfg.mp.accessToken || (cfg.mp.relayUrl && cfg.mp.relaySecret)) || !cfg.mp.webhookSecret)) {
+      throw new Error('Mercado Pago exige MP_WEBHOOK_SECRET e o token (MP_ACCESS_TOKEN ou MP_RELAY=1 com o Worker)');
     }
     if (provider === 'kiwify' && (!cfg.kiwify.checkoutUrl || !cfg.kiwify.webhookToken)) {
       throw new Error('KIWIFY_CHECKOUT_URL e KIWIFY_WEBHOOK_TOKEN são obrigatórios com Kiwify');

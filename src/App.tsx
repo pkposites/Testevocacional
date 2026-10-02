@@ -9,6 +9,7 @@ import { Help } from './pages/Help';
 import { Home } from './pages/Home';
 import { Legal } from './pages/Legal';
 import { MapPage } from './pages/MapPage';
+import { DiagnosticPage } from './pages/DiagnosticPage';
 import { MyMaps } from './pages/MyMaps';
 import { Payment } from './pages/Payment';
 import { Preview } from './pages/Preview';
@@ -58,6 +59,7 @@ export function App() {
           <Route path="/previa" element={<Preview />} />
           <Route path="/pagamento/:orderId" element={<Payment />} />
           <Route path="/mapa/:resultId" element={<MapPage />} />
+          <Route path="/diagnostico/:resultId" element={<DiagnosticPage />} />
           <Route path="/acesso" element={<Access />} />
           <Route path="/meus-mapas" element={<MyMaps />} />
           <Route path="/ajuda" element={<Help />} />

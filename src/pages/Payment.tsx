@@ -7,8 +7,9 @@ type OrderView = {
   order_id: string;
   public_ref: string;
   result_id: string;
+  product?: 'map' | 'diagnostic';
   status: string;
-  next_action: 'pay_pix' | 'open_map' | 'retry' | 'contact_support' | 'redirect';
+  next_action: 'pay_pix' | 'open_map' | 'open_diagnostic' | 'retry' | 'contact_support' | 'redirect';
   amount_cents: number;
   pix: { qr_code: string; qr_base64?: string; ticket_url?: string; expires_at?: string } | null;
   checkout_url: string | null;
@@ -16,6 +17,9 @@ type OrderView = {
 };
 
 const POLL_MS = 5000;
+
+const isDiag = (o: OrderView | null) => o?.product === 'diagnostic';
+const destination = (o: OrderView) => (isDiag(o) ? `/diagnostico/${o.result_id}` : `/mapa/${o.result_id}`);
 const POLL_WINDOW_MS = 120_000;
 
 function useCountdown(iso?: string) {
@@ -48,7 +52,7 @@ export function Payment() {
       setError(null);
       if (v.status === 'paid') {
         track('Purchase', { eventId: `purchase_${v.order_id}`, value: v.amount_cents / 100 });
-        setTimeout(() => nav(`/mapa/${v.result_id}`), 1200);
+        setTimeout(() => nav(destination(v)), 1200);
       }
       return v;
     } catch (e) {
@@ -141,9 +145,9 @@ export function Payment() {
   if (o.status === 'paid') {
     return (
       <div className="wrap">
-        <div className="status ok" role="status">Pagamento confirmado! Abrindo seu mapa…</div>
-        <Link className="btn" to={`/mapa/${o.result_id}`}>Abrir meu mapa</Link>
-        <p className="small muted" style={{ marginTop: 12 }}>Seu código é <strong>{o.public_ref}</strong>. Com ele e seu WhatsApp, você abre o mapa em qualquer aparelho.</p>
+        <div className="status ok" role="status">Pagamento confirmado! Abrindo seu {isDiag(o) ? 'diagnóstico' : 'mapa'}…</div>
+        <Link className="btn" to={destination(o)}>{isDiag(o) ? 'Abrir meu diagnóstico' : 'Abrir meu mapa'}</Link>
+        <p className="small muted" style={{ marginTop: 12 }}>Seu código é <strong>{o.public_ref}</strong>. Com ele e seu WhatsApp, você abre {isDiag(o) ? 'o diagnóstico' : 'o mapa'} em qualquer aparelho.</p>
       </div>
     );
   }
@@ -187,7 +191,7 @@ export function Payment() {
 
   return (
     <div className="wrap">
-      <h1>Pague com Pix para liberar seu mapa</h1>
+      <h1>Pague com Pix para liberar seu {isDiag(o) ? 'diagnóstico' : 'mapa'}</h1>
       <div className="status info" role="status">
         <span className="spinner dark" aria-hidden="true" /> Estamos aguardando a confirmação do Pix
       </div>

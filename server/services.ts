@@ -14,6 +14,12 @@ export type App = {
   fetchImpl: typeof fetch;
 };
 
+/** Pedidos do Diagnóstico usam o prefixo DG- (o mapa usa MC-); mesma tabela, sem mudar o esquema. */
+export const DIAGNOSTIC_PREFIX = 'DG-';
+export const isDiagnosticRef = (ref: unknown) => typeof ref === 'string' && ref.startsWith(DIAGNOSTIC_PREFIX);
+/** Filtro SQL: só pedidos do mapa (alias opcional da tabela orders). */
+export const MAP_ONLY = (alias = '') => `${alias ? alias + '.' : ''}public_ref not like 'DG-%'`;
+
 /** Limite simples por janela fixa, persistido no banco (funções serverless não compartilham memória). */
 export async function rateLimit(db: Db, key: string, limit: number, windowSec: number): Promise<boolean> {
   const row = await one<{ count: number }>(
@@ -47,7 +53,7 @@ export async function accessLink(app: App, phone: string, purpose: 'purchase' | 
 export async function drainOutbox(app: App, orderId?: string): Promise<void> {
   if (!app.messages.enabled) return; // sem API de WhatsApp: o admin envia pelo próprio WhatsApp
   const rows = await app.db.query(
-    `select m.*, o.buyer_name from message_outbox m left join orders o on o.id = m.order_id
+    `select m.*, o.buyer_name, o.public_ref from message_outbox m left join orders o on o.id = m.order_id
      where m.status in ('pending','failed') and m.attempts < 5 ${orderId ? 'and m.order_id = $1' : ''} order by m.created_at limit 20`,
     orderId ? [orderId] : [],
   );
@@ -56,7 +62,7 @@ export async function drainOutbox(app: App, orderId?: string): Promise<void> {
     if (!claimed) continue;
     try {
       const link = await accessLink(app, r.to_phone, 'purchase');
-      await app.messages.send({ to: r.to_phone, name: String(r.buyer_name ?? '').split(' ')[0], link, kind: r.kind === 'free' ? 'free' : 'purchase' });
+      await app.messages.send({ to: r.to_phone, name: String(r.buyer_name ?? '').split(' ')[0], link, kind: r.kind === 'free' ? 'free' : isDiagnosticRef(r.public_ref) ? 'diagnostic' : 'purchase' });
       await app.db.query(`update message_outbox set status = 'sent', sent_at = now(), last_error = null where id = $1`, [r.id]);
     } catch (e) {
       await app.db.query(`update message_outbox set status = 'failed', last_error = $2 where id = $1`, [r.id, String((e as Error).message).slice(0, 300)]);
