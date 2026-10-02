@@ -1,0 +1,32 @@
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../api';
+
+export function MyMaps() {
+  const nav = useNavigate();
+  const [maps, setMaps] = useState<{ result_id: string; public_ref: string; paid_at: string }[] | null>(null);
+  useEffect(() => {
+    api('GET', '/api/access/me')
+      .then((r) => setMaps(r.maps))
+      .catch(async () => {
+        // Sem sessão de acesso: talvez a compra tenha sido feita neste navegador.
+        const s = await api('GET', '/api/quiz/sessions/me').catch(() => null);
+        if (s?.purchased_result_id) nav(`/mapa/${s.purchased_result_id}`, { replace: true });
+        else nav('/acesso', { replace: true });
+      });
+  }, [nav]);
+  if (!maps) return <div className="wrap"><div className="spinner dark" aria-label="Carregando" /></div>;
+  return (
+    <div className="wrap">
+      <h1>Meus mapas</h1>
+      {maps.length === 0 && <p>Nenhum mapa liberado para este e-mail.</p>}
+      {maps.map((m) => (
+        <Link key={m.result_id} to={`/mapa/${m.result_id}`} className="card" style={{ display: 'block', textDecoration: 'none' }}>
+          <strong>Pedido {m.public_ref}</strong>
+          <div className="small muted">Liberado em {new Date(m.paid_at).toLocaleDateString('pt-BR')}</div>
+        </Link>
+      ))}
+      <button className="btn link" onClick={async () => { await api('POST', '/api/access/logout'); nav('/'); }}>Sair deste aparelho</button>
+    </div>
+  );
+}

@@ -1,12 +1,15 @@
 // Servidor local da API (porta 8788) com PGlite persistido em .dev-data e provedor fake.
+import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { handle } from '../server/app';
 import { getApp } from '../server/runtime';
 
 process.env.PGLITE_DIR ??= './.dev-data/pglite';
 process.env.ADMIN_PASSWORD ??= 'admin-local';
+mkdirSync(process.env.PGLITE_DIR, { recursive: true });
 
 const server = createServer(async (req, res) => {
+  try {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
   const body = chunks.length ? Buffer.concat(chunks) : undefined;
@@ -20,6 +23,11 @@ const server = createServer(async (req, res) => {
   if (cookies.length) out['set-cookie'] = cookies;
   res.writeHead(response.status, out);
   res.end(Buffer.from(await response.arrayBuffer()));
+  } catch (e) {
+    console.error(e);
+    res.writeHead(500, { 'content-type': 'application/json' });
+    res.end('{"code":"dev_server_error"}');
+  }
 });
 
 server.listen(8788, () => console.log('API local em http://localhost:8788 (provedor fake, admin: admin-local)'));

@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /mapa/
+Disallow: /acesso
+Disallow: /pagamento/
+Disallow: /admin

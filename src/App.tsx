@@ -1,0 +1,76 @@
+import { useEffect, useState } from 'react';
+import { Link, Route, Routes, useLocation } from 'react-router-dom';
+import { getConsent, setConsent, track } from './analytics';
+import { Access } from './pages/Access';
+import { Admin } from './pages/Admin';
+import { Help } from './pages/Help';
+import { Home } from './pages/Home';
+import { Legal } from './pages/Legal';
+import { MapPage } from './pages/MapPage';
+import { MyMaps } from './pages/MyMaps';
+import { Payment } from './pages/Payment';
+import { Preview } from './pages/Preview';
+import { Quiz } from './pages/Quiz';
+
+function ConsentBanner() {
+  const [show, setShow] = useState(getConsent() === 'unknown');
+  if (!show) return null;
+  const choose = async (v: 'granted' | 'denied') => {
+    setShow(false);
+    await setConsent(v);
+  };
+  return (
+    <div className="consent" role="dialog" aria-label="Preferências de medição">
+      <div className="inner">
+        <p>Usamos cookies de medição para entender quais anúncios trazem visitas. Você pode recusar sem perder nenhuma função. <Link to="/privacidade">Saiba mais</Link>.</p>
+        <div className="row">
+          <button className="btn secondary" onClick={() => choose('denied')}>Recusar</button>
+          <button className="btn" onClick={() => choose('granted')}>Aceitar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function App() {
+  const loc = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    if (loc.pathname === '/') track('PageView', { serverLog: true });
+  }, [loc.pathname]);
+  const isAdmin = loc.pathname.startsWith('/admin');
+  return (
+    <>
+      <header className="topbar no-print">
+        <Link to="/" className="brand">Mapa da <span>Carreira</span></Link>
+        {!isAdmin && <Link to="/meus-mapas" className="small">Já comprei</Link>}
+      </header>
+      <main>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/teste" element={<Quiz />} />
+          <Route path="/previa" element={<Preview />} />
+          <Route path="/pagamento/:orderId" element={<Payment />} />
+          <Route path="/mapa/:resultId" element={<MapPage />} />
+          <Route path="/acesso" element={<Access />} />
+          <Route path="/meus-mapas" element={<MyMaps />} />
+          <Route path="/ajuda" element={<Help />} />
+          <Route path="/privacidade" element={<Legal kind="privacy" />} />
+          <Route path="/termos" element={<Legal kind="terms" />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="*" element={<div className="wrap"><h1>Página não encontrada</h1><Link to="/">Voltar ao início</Link></div>} />
+        </Routes>
+      </main>
+      {!isAdmin && (
+        <footer className="footer no-print">
+          <Link to="/termos">Condições de venda</Link>
+          <Link to="/privacidade">Privacidade</Link>
+          <Link to="/ajuda">Ajuda</Link>
+          <Link to="/acesso">Recuperar acesso</Link>
+          <span>Ferramenta de exploração. Não é avaliação psicológica nem garantia de carreira.</span>
+        </footer>
+      )}
+      {!isAdmin && <ConsentBanner />}
+    </>
+  );
+}
