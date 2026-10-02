@@ -34,7 +34,16 @@ export async function createPostgresDb(url: string): Promise<Db> {
   // prepare:false é exigido pelo pooler em modo transação do Supabase (porta 6543).
   // Algumas conexões permitem que o painel faça suas consultas em paralelo.
   const max = Math.min(10, Math.max(1, Number(process.env.DB_POOL_MAX ?? 4)));
-  const sql = postgres(url, { max, prepare: false, idle_timeout: 20, connect_timeout: 10 });
+  // O código já envia JSON serializado (JSON.stringify + $n::jsonb). Por padrão o postgres.js
+  // serializa de novo e grava uma string JSON em vez do objeto; aqui textos passam direto.
+  const passJson = (x: unknown) => (typeof x === 'string' ? x : JSON.stringify(x));
+  const sql = postgres(url, {
+    max, prepare: false, idle_timeout: 20, connect_timeout: 10,
+    types: {
+      json: { to: 114, from: [114], serialize: passJson, parse: (x: string) => JSON.parse(x) },
+      jsonb: { to: 3802, from: [3802], serialize: passJson, parse: (x: string) => JSON.parse(x) },
+    } as any,
+  });
   const wrap = (s: any): Db => ({
     query: async (text, params = []) => (await s.unsafe(text, params as any[])) as any,
     tx: (fn) => (s.begin ? s.begin((t: any) => fn(wrap(t))) : fn(wrap(s))) as any,

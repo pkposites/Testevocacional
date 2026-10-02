@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:pg": "TEST_DRIVER=postgres vitest run",
     "check:bundle": "node scripts/check-bundle.mjs",
     "db:migrate": "tsx scripts/migrate.ts"
   },
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@netlify/functions": "^6.0.2",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",

@@ -1,7 +1,7 @@
 import { QUESTIONS } from '../shared/quiz';
 import { handle } from '../server/app';
 import { loadConfig } from '../server/config';
-import { createPgliteDb } from '../server/db';
+import { createPgliteDb, createPostgresDb, schemaSql } from '../server/db';
 import { createMessageSender, sentMessages } from '../server/whatsapp';
 import { hmacHex } from '../server/http';
 import { createProvider } from '../server/payments';
@@ -14,7 +14,20 @@ export async function makeApp(env: Record<string, string> = {}): Promise<App> {
   const cfg = loadConfig({ APP_ENV: 'test', PAYMENT_PROVIDER: 'fake', ADMIN_PASSWORD: 'adm', PUBLIC_BASE_URL: BASE, OFFER_MODE: 'paid', ...env });
   sentMessages.length = 0;
   fakeStore.reset();
-  return { cfg, db: await createPgliteDb(), provider: createProvider(cfg), messages: createMessageSender(cfg), fetchImpl: fetch };
+  const db = process.env.TEST_DRIVER === 'postgres' ? await socketDb() : await createPgliteDb();
+  return { cfg, db, provider: createProvider(cfg), messages: createMessageSender(cfg), fetchImpl: fetch };
+}
+
+/** Mesmo driver da produção (postgres.js), falando com um PGlite exposto por socket. */
+async function socketDb() {
+  const { PGlite } = await import('@electric-sql/pglite');
+  const { PGLiteSocketServer } = await import('@electric-sql/pglite-socket');
+  const pg = await PGlite.create();
+  await pg.exec(schemaSql());
+  const port = 40000 + Math.floor(Math.random() * 20000);
+  await new PGLiteSocketServer({ db: pg, port, host: '127.0.0.1' }).start();
+  process.env.DB_POOL_MAX = '1'; // o socket do PGlite atende uma conexão por vez
+  return createPostgresDb(`postgres://postgres@127.0.0.1:${port}/postgres?sslmode=disable`);
 }
 
 /** Cliente HTTP com "pote de cookies", como um navegador. */
