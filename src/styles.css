@@ -403,3 +403,8 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
   .proof.show { transform: translate(-50%, 0); }
 }
 .admin-push { margin-bottom: 14px; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.admin-head h1 { margin: 0; }
+.admin-refresh { width: auto; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; }
+.admin-refresh:active svg { transform: rotate(-90deg); transition: transform 0.2s; }
+.admin-updated { margin: 4px 0 10px; }

@@ -22,6 +22,23 @@ export function Admin() {
   const [msg, setMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<'painel' | 'leads' | 'pedidos'>('painel');
   const [share, setShare] = useState<{ link: string; wa: string } | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshedAt, setRefreshedAt] = useState(() => new Date());
+
+  // Atualizar: recarrega a aba aberta (o app instalado não tem botão de recarregar do navegador).
+  function refresh() {
+    setRefreshKey((k) => k + 1);
+    setRefreshedAt(new Date());
+    if (tab === 'pedidos') void load();
+  }
+  // Ao voltar para o app depois de alguns minutos, atualiza sozinho.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - refreshedAt.getTime() > 60_000) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pedidos e alertas só carregam na aba Pedidos (em paralelo).
   async function load() {
@@ -90,14 +107,23 @@ export function Admin() {
 
   return (
     <div className="wrap admin-wrap">
-      <h1>Admin</h1>
+      <div className="admin-head">
+        <h1>Admin</h1>
+        <button type="button" className="btn secondary admin-refresh" onClick={refresh} aria-label="Atualizar dados">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+          </svg>
+          Atualizar
+        </button>
+      </div>
+      <p className="small muted admin-updated">Atualizado às {refreshedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
       <div className="admin-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'painel'} onClick={() => setTab('painel')}>Painel</button>
         <button role="tab" aria-selected={tab === 'leads'} onClick={() => setTab('leads')}>Leads</button>
         <button role="tab" aria-selected={tab === 'pedidos'} onClick={() => setTab('pedidos')}>Pedidos</button>
       </div>
       {tab === 'painel' && <AdminPush />}
-      {tab === 'painel' ? <Dashboard /> : tab === 'leads' ? <Leads /> : <>
+      {tab === 'painel' ? <Dashboard key={`d${refreshKey}`} /> : tab === 'leads' ? <Leads key={`l${refreshKey}`} /> : <>
       {msg && <div className="status info">{msg}</div>}
       {share && (
         <div className="card soft">
