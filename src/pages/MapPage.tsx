@@ -3,8 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { CATALOG_SIZE, MOMENTS } from '../../shared/quiz';
 import { api, ApiFailure } from '../api';
 import { track } from '../analytics';
-import { DiagnosticOffer } from '../components/DiagnosticOffer';
-import { DimIcon, SparkIcon } from '../components/Icons';
+import { DiagnosticOffer, ScrollNudge } from '../components/DiagnosticOffer';
+import { DimIcon } from '../components/Icons';
 
 type Card = {
   careerId: string; position: number; name: string; reasons: string[]; routine: string; attention: string;
@@ -154,35 +154,12 @@ export function MapPage() {
             : <>Suas preferências mais altas: <strong>{topLabels(map)}</strong>.</>}
         </p>
       </div>
-      {!map.broadProfile && map.cards[0] && (
-        <a href="#diagnostico" className="diag-banner no-print">
-          <SparkIcon size={16} />
-          <span>{data.diagnostic?.purchased ? <>Seu <strong>Diagnóstico de {map.cards[0].name}</strong> está liberado. Abrir</>
-            : data.diagnostic?.mode === 'paid' ? <>Libere seu <strong>Diagnóstico de {map.cards[0].name}</strong>: o plano de 4 semanas feito com as suas respostas</>
-            : interest ? <>Você está na lista do <strong>Diagnóstico de {map.cards[0].name}</strong></> : <>Seu <strong>Diagnóstico de {map.cards[0].name}</strong> está em preparação. Ver o que vem nele</>}</span>
-        </a>
-      )}
-      {map.profile && (
-        <section className="card" aria-labelledby="perfil-title">
-          <h2 id="perfil-title" style={{ marginBottom: 4 }}>Seu perfil de interesses</h2>
-          <p className="small muted">O quanto cada tipo de atividade combina com você, pelas suas respostas ao teste (0 a 100).</p>
-          <ul className="profile" role="list">
-            {map.profile.map((b) => (
-              // Destaque: as duas maiores e quem empatar com a segunda.
-              <li key={b.id} className={!map.broadProfile && b.score >= map.profile![1].score ? 'top' : ''} title={`${b.label}: ${b.score} de 100`}>
-                <span className="pl"><DimIcon dim={b.id} size={16} className="pl-icon" />{b.label.charAt(0).toUpperCase() + b.label.slice(1)}</span>
-                <span className="pt" aria-hidden="true"><span style={{ width: `${Math.max(b.score, 2)}%` }} /></span>
-                <span className="pv">{b.score}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       <p className="small muted">Ordem baseada nas suas respostas e no catálogo de {CATALOG_SIZE} caminhos. Preferência por uma atividade não comprova habilidade.</p>
 
-      <h2 style={{ marginTop: 20 }}>Seus cinco caminhos</h2>
       {map.cards.map((c, idx) => (
         <Fragment key={c.careerId}>
+        {idx === 0 && <h2 style={{ marginTop: 20 }}>Seu 1º caminho</h2>}
+        {idx === 1 && <h2 style={{ marginTop: 24 }}>Seus outros {map.cards.length - 1} caminhos</h2>}
         <article className="card career">
           <div className="pos">{c.position}º caminho</div>
           <div className="career-head">
@@ -233,6 +210,22 @@ export function MapPage() {
             firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail} diagnostic={data.diagnostic}
             onInterested={() => setInterest(true)}
           />
+        )}
+        {idx === 0 && map.profile && (
+          <section className="card" aria-labelledby="perfil-title">
+            <h2 id="perfil-title" style={{ marginBottom: 4 }}>Seu perfil de interesses</h2>
+            <p className="small muted">O quanto cada tipo de atividade combina com você, pelas suas respostas ao teste (0 a 100).</p>
+            <ul className="profile" role="list">
+              {map.profile.map((b) => (
+                // Destaque: as duas maiores e quem empatar com a segunda.
+                <li key={b.id} className={!map.broadProfile && b.score >= map.profile![1].score ? 'top' : ''} title={`${b.label}: ${b.score} de 100`}>
+                  <span className="pl"><DimIcon dim={b.id} size={16} className="pl-icon" />{b.label.charAt(0).toUpperCase() + b.label.slice(1)}</span>
+                  <span className="pt" aria-hidden="true"><span style={{ width: `${Math.max(b.score, 2)}%` }} /></span>
+                  <span className="pv">{b.score}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
         </Fragment>
       ))}
@@ -334,6 +327,9 @@ export function MapPage() {
         <a className="btn secondary no-print" style={{ marginBottom: 12 }} href="#diagnostico">Ver meu Diagnóstico de {map.cards[0].name}</a>
       ))}
       <button className="btn secondary no-print" onClick={printMap}>Salvar ou imprimir</button>
+      {!map.broadProfile && map.cards[0] && !data.diagnostic?.purchased && (
+        <ScrollNudge career={map.cards[0].name} paid={data.diagnostic?.mode === 'paid'} />
+      )}
       <p className="small muted" style={{ marginTop: 12 }}>
         Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>. Anote ou tire um print.
       </p>
