@@ -868,6 +868,8 @@ route('GET', '/api/diagnostic/:id/sample', async (app, ctx) => {
     weeks: d.weeks.map((w) => w.title),
     tasks: d.weeks.reduce((n, w) => n + w.tasks.length, 0),
     first_jobs_count: d.firstJobs.length,
+    course_terms_count: d.formation.courseTerms.length,
+    checklist_count: d.formation.checklist.length + d.formation.redFlags.length,
   });
 });
 

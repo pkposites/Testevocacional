@@ -452,3 +452,25 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .diag-pick .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .diag-pick .chips::-webkit-scrollbar { display: none; }
 .diag-pick .chips button { flex: 0 0 auto; white-space: nowrap; }
+.diag-steps li { position: relative; }
+.diag-steps li.open { border: 2px solid var(--accent); }
+.diag-steps li.locked em { color: var(--muted); }
+.diag-steps li.locked { background: #fffaf6; }
+.diag-step-lock { flex: 0 0 auto; margin-left: auto; color: var(--accent-dark); }
+.ds-free { display: block; margin-top: 2px; color: var(--title) !important; font-size: 0.93rem !important; }
+.ds-free b { color: var(--accent-dark); }
+.diag-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 16px; }
+.diag-vs div { padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 2px; }
+.diag-vs span { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); }
+.diag-vs strong { font-size: 1rem; color: var(--title); line-height: 1.25; }
+.diag-vs .hl { background: var(--title); border-color: var(--title); }
+.diag-vs .hl span { color: #ffb48a; } .diag-vs .hl strong { color: #fff; }
+.diag-anchor { text-align: center; font-size: 1rem; font-weight: 600; color: var(--title); margin: 0 0 4px; }
+.diag-guarantee { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--ok-soft); color: var(--title); font-size: 0.95rem; }
+.diag-guarantee svg { color: var(--ok); flex: 0 0 auto; }
+.diag-foot { justify-content: center; }
+.buybar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; display: flex; gap: 10px; align-items: center; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--title); color: #fff; box-shadow: 0 -6px 20px rgba(0,0,0,0.18); }
+.buybar span { flex: 1; font-size: 0.92rem; line-height: 1.25; }
+.buybar strong { color: #ffb48a; }
+.buybar .btn { width: auto; margin: 0; padding: 10px 16px; white-space: nowrap; }
+body.has-buybar { padding-bottom: 76px; }

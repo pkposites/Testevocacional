@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, brl } from '../api';
 import { track } from '../analytics';
-import { CheckIcon, DimIcon, LockIcon, SparkIcon } from './Icons';
+import { CheckIcon, LockIcon, SparkIcon } from './Icons';
 
 type Card = { careerId: string; name: string; attention: string; tension?: string | null; dim?: string; match?: number };
 type Ctx = { moment?: string; dailyTime?: number; currentArea?: string };
@@ -14,14 +14,6 @@ const WANTS = [
   { value: 'vagas', label: 'Como conseguir as primeiras oportunidades' },
   { value: 'mentoria', label: 'Conversar com alguém que já trabalha na área' },
 ];
-/** As 4 etapas do roteiro: o que a pessoa leva, em linguagem direta. */
-const STEPS = [
-  { title: 'Testar a rotina da área', sub: 'antes de gastar com curso' },
-  { title: 'Escolher a formação certa', sub: 'o que a área exige de verdade' },
-  { title: 'Montar seu primeiro projeto', sub: 'algo concreto para mostrar' },
-  { title: 'Buscar as primeiras vagas', sub: 'onde procurar e o que pesquisar' },
-];
-
 /** Barra fixa que convida a descer até o diagnóstico; some quando a oferta aparece na tela. */
 export function ScrollNudge({ career, paid }: { career: string; paid: boolean }) {
   const [show, setShow] = useState(false);
@@ -48,7 +40,33 @@ export function ScrollNudge({ career, paid }: { career: string; paid: boolean })
   );
 }
 
-type Sample = { today: { activity: string; routine: string; requirement: string }; requirement: string; path: 'livre' | 'tecnico' | 'regulada'; proof_teaser: string; tasks: number };
+/** Barra de compra fixa: aparece só depois que a pessoa passou da oferta sem comprar. */
+function BuyBar({ career, price, busy, onBuy }: { career: string; price: string; busy: boolean; onBuy: () => void }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const el = document.getElementById('diagnostico');
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setShow(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    document.body.classList.toggle('has-buybar', show);
+    return () => document.body.classList.remove('has-buybar');
+  }, [show]);
+  if (!show) return null;
+  return (
+    <div className="buybar no-print" role="region" aria-label="Comprar o roteiro">
+      <span>Passo a passo para <strong>{career}</strong></span>
+      <button type="button" className="btn" onClick={onBuy} disabled={busy}>{busy ? 'Gerando…' : `Quero · ${price}`}</button>
+    </div>
+  );
+}
+
+type Sample = {
+  today: { activity: string; routine: string; requirement: string }; requirement: string; path: 'livre' | 'tecnico' | 'regulada';
+  proof_teaser: string; tasks: number; first_jobs_count: number; course_terms_count?: number; checklist_count?: number;
+};
 const PATH_LABEL = { livre: 'Dá para começar sem diploma', tecnico: 'Curso técnico ou livre é o caminho comum', regulada: 'Exige formação ou registro' };
 
 export function DiagnosticOffer(props: {
@@ -132,15 +150,6 @@ export function DiagnosticOffer(props: {
         </p>
       </div>
 
-      <ol className="diag-steps">
-        {STEPS.map((s, i) => (
-          <li key={s.title}>
-            <span className="diag-step-n">{i + 1}</span>
-            <span><strong>{s.title}</strong><em>{s.sub}</em></span>
-          </li>
-        ))}
-      </ol>
-
       {!purchased && cards.length > 1 && (
         <div className="diag-pick">
           <div className="diag-pick-label">Escolha o caminho do seu plano:</div>
@@ -154,19 +163,44 @@ export function DiagnosticOffer(props: {
         </div>
       )}
 
+      <ol className="diag-steps" aria-live="polite">
+        <li className="open">
+          <span className="diag-step-n">1</span>
+          <span>
+            <strong>Testar a rotina da área</strong>
+            {sample ? <em className="ds-free"><b>Faça hoje (grátis):</b> {sample.today.activity.replace(/^Faça esta atividade:\s*/, '')}</em> : <em>antes de gastar com curso</em>}
+          </span>
+        </li>
+        <li className={purchased ? '' : 'locked'}>
+          <span className="diag-step-n">2</span>
+          <span>
+            <strong>Escolher a formação certa</strong>
+            <em>{sample ? `${PATH_LABEL[sample.path]} · ${sample.course_terms_count ?? 3} cursos para pesquisar e ${sample.checklist_count ?? 6} sinais de curso bom ou furado` : 'o que a área exige de verdade'}</em>
+          </span>
+          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
+        </li>
+        <li className={purchased ? '' : 'locked'}>
+          <span className="diag-step-n">3</span>
+          <span>
+            <strong>Montar seu primeiro projeto</strong>
+            <em>{sample ? sample.proof_teaser : 'algo concreto para mostrar'}</em>
+          </span>
+          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
+        </li>
+        <li className={purchased ? '' : 'locked'}>
+          <span className="diag-step-n">4</span>
+          <span>
+            <strong>Buscar as primeiras vagas</strong>
+            <em>{sample ? `${sample.first_jobs_count} cargos para procurar e uma conversa com quem já trabalha nisso` : 'onde procurar e o que pesquisar'}</em>
+          </span>
+          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
+        </li>
+      </ol>
+
       {!purchased && (
-        <div className="diag-sample" aria-live="polite">
-          <div className="diag-sample-head">
-            {first.dim && <span className="diag-doc-icon"><DimIcon dim={first.dim} size={18} /></span>}
-            <div className="diag-doc-title">Veja grátis o passo 1 · {first.name}</div>
-          </div>
-          {!sample ? <div className="spinner dark" aria-label="Carregando amostra" /> : (
-            <>
-              <p className="ds-today"><strong>Faça hoje:</strong> {sample.today.activity.replace(/^Faça esta atividade:\s*/, "")}</p>
-              <span className="pill dg-path">{PATH_LABEL[sample.path]}</span>
-              <div className="ds-lock"><LockIcon size={14} /> Passos 2, 3 e 4 no plano completo</div>
-            </>
-          )}
+        <div className="diag-vs">
+          <div><span>Seu mapa grátis</span><strong>mostra qual caminho</strong></div>
+          <div className="hl"><span>O roteiro</span><strong>mostra como entrar nele</strong></div>
         </div>
       )}
 
@@ -174,6 +208,7 @@ export function DiagnosticOffer(props: {
         <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir meu passo a passo</button>
       ) : paid ? (
         <div className="diag-buy">
+          <p className="diag-anchor">Um curso escolhido errado custa centenas de reais. Antes, teste a área com um plano feito para você:</p>
           <div className="diag-price">
             <strong>{price}</strong>
             <span>Pagamento único no Pix · liberado na hora</span>
@@ -181,9 +216,9 @@ export function DiagnosticOffer(props: {
           <button className="btn diag-cta" onClick={buy} disabled={busy}>
             {busy ? 'Gerando Pix…' : <>Quero meu passo a passo completo</>}
           </button>
-          <p className="diag-foot">
-            <CheckIcon size={15} /> {sample?.tasks ?? tasks} tarefas guiadas · {minutes} min por dia · fica salvo no seu WhatsApp
-          </p>
+          <div className="diag-guarantee"><CheckIcon size={18} /><span><strong>Garantia de 7 dias:</strong> se não gostar, devolvemos seu dinheiro.</span></div>
+          <p className="diag-foot">{sample?.tasks ?? tasks} tarefas guiadas · {minutes} min por dia · fica salvo no seu WhatsApp</p>
+          <BuyBar career={first.name} price={price} busy={busy} onBuy={buy} />
         </div>
       ) : !interested ? (
         <>
