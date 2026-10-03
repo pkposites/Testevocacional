@@ -397,3 +397,8 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .pv-next strong { color: var(--title); font-size: 1.02rem; }
 .pv-next span:last-child { font-size: 0.92rem; }
 .diag-promise { font-size: 1.02rem; } .dg-today { border: 2px solid var(--accent); }
+/* No celular a notificação fica embaixo, sem cobrir o cabeçalho */
+@media (max-width: 640px) {
+  .proof { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); transform: translate(-50%, 140%); }
+  .proof.show { transform: translate(-50%, 0); }
+}

@@ -10,6 +10,8 @@ export function MyMaps() {
       // Sem sessão de acesso: talvez a compra/cadastro tenha sido feita neste navegador.
       const s = await getMySession().catch(() => null);
       if (s?.purchased_result_id) nav(`/mapa/${s.purchased_result_id}`, { replace: true });
+      else if (s?.result) nav('/previa', { replace: true }); // terminou o teste mas ainda não liberou o mapa
+      else if (s && s.progress > 0) nav('/teste', { replace: true }); // teste pela metade neste aparelho
       else nav('/acesso', { replace: true });
     };
     api('GET', '/api/access/me?optional=1')

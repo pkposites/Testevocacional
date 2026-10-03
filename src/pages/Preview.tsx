@@ -59,7 +59,7 @@ export function Preview() {
     try {
       const r = await api('POST', '/api/leads', {
         result_id: resultId, buyer_name: name, buyer_phone: phone, contact_consent: contactOk, public_name_ok: publicName,
-        marketing_opt_in: contactOk, consent: getConsent(), ...metaCookies(),
+        marketing_opt_in: optIn, consent: getConsent(), ...metaCookies(),
       });
       track('Lead', { eventId: r.event_id });
       nav(`/mapa/${r.result_id}`);
@@ -147,7 +147,11 @@ export function Preview() {
             </div>
             <label className="check">
               <input type="checkbox" checked={contactOk} onChange={(e) => setContactOk(e.target.checked)} required />
-              <span>Quero receber meu resultado pelo WhatsApp.</span>
+              <span>Concordo em usar meu WhatsApp para salvar meu mapa e recuperá-lo depois.</span>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={optIn} onChange={(e) => setOptIn(e.target.checked)} />
+              <span>Quero receber dicas e novidades pelo WhatsApp (opcional).</span>
             </label>
             <label className="check">
               <input type="checkbox" checked={publicName} onChange={(e) => setPublicName(e.target.checked)} />

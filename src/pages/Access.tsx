@@ -70,15 +70,15 @@ export function Access() {
         </>
       ) : (
         <form className="stack" onSubmit={submit}>
-          <p>Informe o WhatsApp usado na compra e o código do pedido, que aparece na tela do Pix (começa com MC-).</p>
+          <p>Informe o WhatsApp que você usou e o código do seu mapa. Ele aparece no topo do mapa (começa com MC-) ou na tela do Pix do roteiro (começa com DG-).</p>
           <div>
             <label htmlFor="rec-phone">WhatsApp com DDD</label>
             <input id="rec-phone" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="(11) 98765-4321" required
               value={phone} onChange={(e) => setPhone(maskBrPhone(e.target.value))} />
           </div>
           <div>
-            <label htmlFor="rec-code">Código do pedido {codeOptional && <span className="muted">(opcional)</span>}</label>
-            <input id="rec-code" type="text" autoCapitalize="characters" placeholder="MC-XXXXXX" maxLength={10}
+            <label htmlFor="rec-code">Código do mapa ou do pedido {codeOptional && <span className="muted">(opcional)</span>}</label>
+            <input id="rec-code" type="text" autoCapitalize="characters" placeholder="MC-XXXXXX ou DG-XXXXXX" maxLength={10}
               value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
             {codeOptional && <p className="small muted" style={{ marginTop: 6 }}>Sem o código, enviamos um link para o seu WhatsApp.</p>}
           </div>
@@ -86,7 +86,7 @@ export function Access() {
           <button className="btn" disabled={busy || !valid}>{busy ? 'Verificando…' : code ? 'Abrir meu mapa' : 'Enviar link no WhatsApp'}</button>
         </form>
       )}
-      <p className="small" style={{ marginTop: 16 }}><Link to="/ajuda">Perdi o código do pedido</Link></p>
+      <p className="small" style={{ marginTop: 16 }}><Link to="/ajuda">Perdi o código</Link> · <Link to="/teste">Ainda não terminei o teste</Link></p>
     </div>
   );
 }

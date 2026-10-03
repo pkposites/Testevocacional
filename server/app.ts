@@ -531,7 +531,7 @@ route('POST', '/api/leads', async (app, ctx) => {
   const name = String(body.buyer_name ?? '').trim().slice(0, 60);
   if (name.length < 2) throw new ApiError(400, 'invalid_name', 'Informe seu primeiro nome.');
   const phone = normalizePhone(body.buyer_phone);
-  if (body.contact_consent !== true) throw new ApiError(400, 'consent_required', 'Para liberar o mapa, aceite receber seu resultado pelo WhatsApp.');
+  if (body.contact_consent !== true) throw new ApiError(400, 'consent_required', 'Para liberar o mapa, aceite usar seu WhatsApp para salvar e recuperar o mapa.');
   const publicNameOk = body.public_name_ok === true;
 
   const attribution = { ...s.attribution, ...trackingContext(ctx, body) };
