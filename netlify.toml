@@ -25,3 +25,45 @@
   for = "/admin-sw.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Páginas pessoais, de pagamento e de operação: fora do Google.
+[[headers]]
+  for = "/previa"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/mapa/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/pagamento/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/diagnostico/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/acesso"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/meus-mapas"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/admin"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+

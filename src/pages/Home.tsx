@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { brl, getConfig, getMySession } from '../api';
 import { CATALOG_SIZE, QUESTIONS, QUIZ_MINUTES } from '../../shared/quiz';
 import { DimIcon } from '../components/Icons';
+import { FAQ } from '../../shared/seo';
 
 export function Home() {
   const nav = useNavigate();
@@ -17,7 +18,8 @@ export function Home() {
   }, []);
   return (
     <div className="wrap">
-      <h1>Qual caminho profissional vale a pena você testar?</h1>
+      <span className="pill">Teste vocacional grátis</span>
+      <h1 style={{ marginTop: 10 }}>Qual caminho profissional vale a pena você testar?</h1>
       {free ? (
         <p>
           Responda {QUESTIONS.length} perguntas sobre o que você gosta de fazer e receba <strong>grátis</strong> seu mapa com cinco caminhos e um plano de
@@ -78,6 +80,15 @@ export function Home() {
         </div>
         <p className="small muted" style={{ marginTop: 12 }}>{free ? 'Grátis, sem pagamento e sem cartão.' : 'Não pedimos seus contatos para mostrar a prévia.'}</p>
       </div>
+      <section className="faq" aria-labelledby="faq-title">
+        <h2 id="faq-title">Perguntas frequentes</h2>
+        {FAQ.map((f) => (
+          <details key={f.q}>
+            <summary>{f.q}</summary>
+            <p className="small">{f.a}</p>
+          </details>
+        ))}
+      </section>
       <p className="small"><Link to="/meus-mapas">{free ? "Já fiz o teste e quero abrir meu mapa" : "Já comprei e quero acessar meu mapa"}</Link></p>
     </div>
   );

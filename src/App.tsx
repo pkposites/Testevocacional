@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getConfig } from './api';
 import { SocialProof } from './components/SocialProof';
+import { seoFor } from '../shared/seo';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { getConsent, setConsent, track } from './analytics';
 import { Access } from './pages/Access';
@@ -37,6 +38,24 @@ function ConsentBanner() {
 
 export function App() {
   const loc = useLocation();
+  useEffect(() => {
+    // Título, descrição, endereço oficial e indexação por página (o HTML inicial já vem certo do build).
+    const seo = seoFor(loc.pathname);
+    document.title = seo.title;
+    const meta = (sel: string, attr: string, val: string) => {
+      let el = document.head.querySelector(sel) as HTMLMetaElement | HTMLLinkElement | null;
+      if (!el) {
+        el = document.createElement(sel.startsWith('link') ? 'link' : 'meta') as HTMLMetaElement;
+        const m = sel.match(/\[(\w+)="([^"]+)"\]/);
+        if (m) el.setAttribute(m[1], m[2]);
+        document.head.appendChild(el);
+      }
+      el.setAttribute(attr, val);
+    };
+    meta('meta[name="description"]', 'content', seo.description);
+    meta('meta[name="robots"]', 'content', seo.index ? 'index,follow' : 'noindex,nofollow');
+    if (seo.index) meta('link[rel="canonical"]', 'href', `${window.location.origin}${seo.path === '/' ? '/' : seo.path}`);
+  }, [loc.pathname]);
   useEffect(() => {
     window.scrollTo(0, 0);
     if (loc.pathname === '/') track('PageView', { serverLog: true });

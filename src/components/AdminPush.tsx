@@ -24,6 +24,8 @@ export function useAdminManifest() {
     t.name = 'apple-mobile-web-app-title';
     t.content = 'Mapa Admin';
     document.head.appendChild(t);
+    // No painel, o ícone da tela de início é o do admin.
+    document.head.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href', '/icons/admin-180.png');
     const c = document.createElement('meta');
     c.name = 'apple-mobile-web-app-capable';
     c.content = 'yes';

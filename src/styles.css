@@ -408,3 +408,8 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .admin-refresh { width: auto; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; }
 .admin-refresh:active svg { transform: rotate(-90deg); transition: transform 0.2s; }
 .admin-updated { margin: 4px 0 10px; }
+.faq { margin: 24px 0 16px; }
+.faq h2 { font-size: 1.15rem; }
+.faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.faq summary { cursor: pointer; font-weight: 700; color: var(--title); }
+.faq details p { margin: 8px 0 0; }

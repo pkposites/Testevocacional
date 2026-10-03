@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx watch scripts/dev-server.ts\" \"vite\"",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build": "tsc -p tsconfig.json --noEmit && vite build && tsx scripts/seo-build.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:pg": "TEST_DRIVER=postgres vitest run",
