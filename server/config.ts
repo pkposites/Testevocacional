@@ -60,6 +60,8 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
   if (!Number.isInteger(diagnosticPriceCents) || diagnosticPriceCents <= 0) throw new Error('DIAGNOSTIC_PRICE_CENTS inválido');
   if ((e.CURRENCY ?? 'BRL') !== 'BRL') throw new Error('Somente BRL é suportado');
 
+  // Aceita 1/true/sim (com espaços ou maiúsculas): valor digitado no painel não deve desligar o Worker.
+  const mpRelay = /^(1|true|yes|sim|on)$/i.test((e.MP_RELAY ?? '').trim());
   const cfg: AppConfig = {
     env,
     publicBaseUrl: (req(e.PUBLIC_BASE_URL, 'PUBLIC_BASE_URL', env) ?? 'http://localhost:5173').replace(/\/$/, ''),
@@ -81,8 +83,8 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
       pixExpirationMinutes: Number(e.MP_PIX_EXPIRATION_MINUTES ?? 30),
       apiBase: e.MP_API_BASE ?? 'https://api.mercadopago.com',
       // Mesmo Worker e mesma assinatura usados para a Meta (MP_RELAY=1 liga).
-      relayUrl: e.MP_RELAY === '1' ? (e.RELAY_URL ?? e.META_RELAY_URL)?.replace(/\/+$/, '') : undefined,
-      relaySecret: e.MP_RELAY === '1' ? e.RELAY_SECRET ?? e.META_RELAY_SECRET : undefined,
+      relayUrl: mpRelay ? (e.RELAY_URL ?? e.META_RELAY_URL)?.trim().replace(/\/+$/, '') : undefined,
+      relaySecret: mpRelay ? (e.RELAY_SECRET ?? e.META_RELAY_SECRET)?.trim() : undefined,
     },
     kiwify: {
       checkoutUrl: e.KIWIFY_CHECKOUT_URL,

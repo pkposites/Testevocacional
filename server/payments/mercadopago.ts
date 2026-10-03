@@ -111,7 +111,11 @@ export function createMercadoPago(cfg: AppConfig, fetchImpl: typeof fetch = fetc
   const viaRelay = !!(cfg.mp.relayUrl && cfg.mp.relaySecret);
   const auth = (): Record<string, string> => {
     if (viaRelay) return {}; // o Worker coloca o token
-    if (!cfg.mp.accessToken) throw new Error('MP_ACCESS_TOKEN não configurado');
+    if (!cfg.mp.accessToken) {
+      throw new Error(cfg.mp.relayUrl
+        ? 'Mercado Pago: falta RELAY_SECRET/META_RELAY_SECRET para usar o Worker'
+        : 'Mercado Pago: token não configurado no site (confira MP_RELAY=1 e META_RELAY_URL no Netlify)');
+    }
     return { Authorization: `Bearer ${cfg.mp.accessToken}` };
   };
 

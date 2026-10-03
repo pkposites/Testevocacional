@@ -405,7 +405,7 @@ async function ensureCheckout(app: App, order: any, forceNew = false): Promise<v
   } catch (e) {
     // Falha de rede/provedor não é recusa financeira: pedido e respostas ficam preservados.
     console.error('createCheckout falhou', (e as Error).message);
-    const detail = (e as Error).message.match(/(Worker do )?Mercado Pago.*/)?.[0].slice(0, 160);
+    const detail = ((e as Error).message.match(/(Worker do )?Mercado Pago.*/)?.[0] ?? (e as Error).message)?.slice(0, 160);
     throw new ApiError(502, e instanceof ProviderNetworkError ? 'provider_unavailable' : 'provider_error',
       `Não conseguimos gerar o Pix agora. Suas respostas estão salvas; tente novamente em instantes.${detail ? ` (${detail})` : ''}`);
   }
