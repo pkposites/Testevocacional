@@ -1156,6 +1156,56 @@ route('POST', '/api/admin/orders/:id/manual-release', async (app, ctx) => {
   return json(ctx, 200, { result: r });
 });
 
+/**
+ * Apaga leads de teste por completo: pedido do mapa, pedidos do diagnóstico do mesmo resultado, pagamentos,
+ * acessos, progresso, eventos, respostas e a sessão do teste. Irreversível; exige confirmar = "APAGAR".
+ */
+route('POST', '/api/admin/leads/purge', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const body = await readJson(ctx);
+  if (body.confirm !== 'APAGAR') throw new ApiError(400, 'confirm_required', 'Confirme digitando APAGAR.');
+  const ids = Array.isArray(body.order_ids) ? body.order_ids.filter((x: unknown) => typeof x === 'string' && UUID_RE.test(x)).slice(0, 500) : [];
+  if (ids.length === 0) throw new ApiError(400, 'no_ids', 'Selecione ao menos um lead.');
+  const counts = await app.db.tx(async (t) => {
+    const ph = (a: unknown[], from = 1) => a.map((_, i) => `$${i + from}`).join(',') || 'null';
+    const seeds = await t.query(`select id, result_id, session_id from orders where id in (${ph(ids)})`, ids);
+    const sessions = [...new Set(seeds.map((r) => r.session_id as string))];
+    if (sessions.length === 0) return { orders: 0 };
+    const results = (await t.query(`select id from results where session_id in (${ph(sessions)})`, sessions)).map((r) => r.id as string);
+    const orders = await t.query(
+      `select id, buyer_phone from orders where session_id in (${ph(sessions)})${results.length ? ` or result_id in (${ph(results, sessions.length + 1)})` : ''}`,
+      [...sessions, ...results]);
+    const orderIds = orders.map((r) => r.id as string);
+    const phones = [...new Set(orders.map((r) => r.buyer_phone as string))];
+    const ents = orderIds.length ? (await t.query(`select id from entitlements where order_id in (${ph(orderIds)})`, orderIds)).map((r) => r.id as string) : [];
+    if (ents.length) {
+      await t.query(`delete from progress where entitlement_id in (${ph(ents)})`, ents);
+      await t.query(`delete from reflections where entitlement_id in (${ph(ents)})`, ents);
+      await t.query(`delete from entitlements where id in (${ph(ents)})`, ents);
+    }
+    if (orderIds.length) {
+      await t.query(`delete from payments where order_id in (${ph(orderIds)})`, orderIds);
+      await t.query(`delete from message_outbox where order_id in (${ph(orderIds)})`, orderIds);
+      await t.query(`delete from events where order_id in (${ph(orderIds)})`, orderIds);
+      await t.query(`delete from orders where id in (${ph(orderIds)})`, orderIds);
+    }
+    await t.query(`delete from events where session_id in (${ph(sessions)})`, sessions);
+    await t.query(`delete from results where session_id in (${ph(sessions)})`, sessions);
+    await t.query(`delete from quiz_sessions where id in (${ph(sessions)})`, sessions);
+    // Acessos por WhatsApp só saem se o número não tiver mais nenhum mapa liberado.
+    for (const phone of phones) {
+      const still = await one(t, `select 1 from entitlements where buyer_phone = $1 limit 1`, [phone]);
+      if (!still) {
+        await t.query(`delete from access_sessions where buyer_phone = $1`, [phone]);
+        await t.query(`delete from access_tokens where buyer_phone = $1`, [phone]);
+      }
+    }
+    await t.query(`insert into admin_audit (operator, action, note) values ('admin','purge_leads',$1)`, [`${orderIds.length} pedido(s), ${sessions.length} teste(s)`]);
+    return { orders: orderIds.length, sessions: sessions.length };
+  });
+  return json(ctx, 200, { ok: true, ...counts });
+});
+
 route('POST', '/api/admin/orders/:id/revoke', async (app, ctx) => {
   const order = await adminOrder(app, ctx);
   const body = await readJson(ctx);

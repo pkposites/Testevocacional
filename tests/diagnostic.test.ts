@@ -157,3 +157,45 @@ describe('conteúdo do diagnóstico', () => {
     }
   });
 });
+
+describe('apagar leads de teste', () => {
+  it('remove lead, diagnóstico pago, respostas e acesso; mantém os outros', async () => {
+    app = await makeApp({ OFFER_MODE: 'free', DIAGNOSTIC_MODE: 'paid' });
+    const a = new Client(app);
+    const { resultId } = await lead(a);
+    const o = await a.req('POST', '/api/diagnostic/orders', { result_id: resultId });
+    await pay(o.body.order_id);
+    await a.req('PUT', '/api/progress', { result_id: resultId, career_id: (await a.req('GET', `/api/results/${resultId}/full`)).body.map.cards[0].careerId, day: 1, checked: true });
+
+    const b = new Client(app);
+    await b.req('POST', '/api/quiz/sessions', {});
+    await b.req('PUT', '/api/quiz/sessions/me', { answers: analyticAnswers(), context: { moment: 'first', dailyTime: 15 } });
+    const rb = await b.req('POST', '/api/results', {});
+    await b.req('POST', '/api/leads', { result_id: rb.body.result_id, buyer_name: 'Bia', buyer_phone: '21987654321', contact_consent: true });
+
+    const adm = new Client(app);
+    await adm.req('POST', '/api/admin/login', { password: 'adm' });
+    const leads = (await adm.req('GET', '/api/admin/leads')).body.leads;
+    expect(leads).toHaveLength(2);
+    const ana = leads.find((l: any) => l.buyer_name === 'Ana Souza');
+
+    expect((await adm.req('POST', '/api/admin/leads/purge', { order_ids: [ana.id] })).status).toBe(400);
+    expect((await new Client(app).req('POST', '/api/admin/leads/purge', { order_ids: [ana.id], confirm: 'APAGAR' })).status).toBe(401);
+    const r = await adm.req('POST', '/api/admin/leads/purge', { order_ids: [ana.id], confirm: 'APAGAR' });
+    expect(r.body).toMatchObject({ ok: true, orders: 2, sessions: 1 });
+
+    const left = (await adm.req('GET', '/api/admin/leads')).body.leads;
+    expect(left.map((l: any) => l.buyer_name)).toEqual(['Bia']);
+    const n = async (sql: string) => Number((await app.db.query(sql))[0].n);
+    expect(await n(`select count(*) n from orders`)).toBe(1);
+    expect(await n(`select count(*) n from payments`)).toBe(0);
+    expect(await n(`select count(*) n from entitlements`)).toBe(1);
+    expect(await n(`select count(*) n from progress`)).toBe(0);
+    expect(await n(`select count(*) n from results`)).toBe(1);
+    expect(await n(`select count(*) n from quiz_sessions`)).toBe(1);
+    expect(await n(`select count(*) n from access_sessions where buyer_phone = '5511987654321'`)).toBe(0);
+    // O aparelho da pessoa apagada perde o acesso; o outro continua.
+    expect((await a.req('GET', `/api/results/${resultId}/full`)).status).toBe(403);
+    expect((await b.req('GET', `/api/results/${rb.body.result_id}/full`)).status).toBe(200);
+  });
+});
