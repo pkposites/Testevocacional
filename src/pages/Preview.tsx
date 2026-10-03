@@ -103,6 +103,27 @@ export function Preview() {
         </h1>
         <p>{summary.explanation}</p>
 
+        <section className="next-steps" aria-labelledby="next-title">
+          <h2 id="next-title">O que acontece agora</h2>
+          <p className="next-lead">Você vai descobrir <strong>qual profissão mais se encaixa no seu perfil</strong> e <strong>como começar a entrar nela</strong>.</p>
+          <ol>
+            <li>
+              <span className="ns-num">1</span>
+              <div>
+                <strong>Seu Mapa da Carreira · grátis</strong>
+                <span>As 5 profissões que mais combinam com você, o porquê de cada uma (com base nas suas respostas) e um plano de 7 dias para testar.</span>
+              </div>
+            </li>
+            <li>
+              <span className="ns-num">2</span>
+              <div>
+                <strong>Diagnóstico prático da sua profissão nº 1{cfg.diagnostic_mode === 'paid' && cfg.diagnostic_price_cents ? ` · ${brl(cfg.diagnostic_price_cents)}` : ''}</strong>
+                <span>Como começar a ingressar: a formação que a área pede de verdade, um plano de 4 semanas no seu ritmo, a prova prática para mostrar e onde procurar as primeiras vagas.{cfg.diagnostic_mode === 'paid' ? ' Opcional, você decide depois de ver o mapa.' : ''}</span>
+              </div>
+            </li>
+          </ol>
+        </section>
+
         {purchased ? (
           <div className="card">
             <div className="status ok">Seu mapa já está liberado.</div>

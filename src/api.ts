@@ -34,6 +34,8 @@ export type PublicConfig = {
   dev_tools: boolean;
   whatsapp_auto: boolean;
   offer_mode: 'free' | 'paid';
+  diagnostic_mode?: 'waitlist' | 'paid';
+  diagnostic_price_cents?: number;
 };
 
 let configPromise: Promise<PublicConfig> | undefined;

@@ -367,3 +367,15 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 @keyframes nudge-in { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes nudge-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 @media (prefers-reduced-motion: reduce) { .diag-cta, .nudge, .nudge-arrow { animation: none; } }
+
+/* O que acontece agora (prévia) */
+.next-steps { margin: 4px 0 16px; padding: 16px; border-radius: 16px; background: var(--title); color: #fff; }
+.next-steps h2 { color: #fff; margin: 0 0 6px; font-size: 1.15rem; }
+.next-lead { margin: 0 0 12px; color: #e6ebf3; }
+.next-lead strong { color: #ffb48a; }
+.next-steps ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.next-steps li { display: flex; gap: 12px; align-items: flex-start; background: rgba(255, 255, 255, 0.07); border-radius: 12px; padding: 12px; }
+.next-steps li strong { display: block; color: #fff; margin-bottom: 2px; }
+.next-steps li span:not(.ns-num) { display: block; font-size: 0.9rem; color: #d5dce8; line-height: 1.4; }
+.ns-num { flex: 0 0 28px; height: 28px; border-radius: 99px; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 800; }
+.map-intro { font-size: 1.02rem; margin: 6px 0 14px; }

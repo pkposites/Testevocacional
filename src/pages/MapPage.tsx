@@ -145,6 +145,12 @@ export function MapPage() {
     <div className="wrap">
       <span className="pill">{data.offer_mode === 'free' ? 'Código' : 'Pedido'} {data.public_ref}</span>
       <h1 style={{ marginTop: 10 }}>{data.buyer_first_name}, este é o seu Mapa da Carreira</h1>
+      {!map.broadProfile && map.cards[0] && (
+        <p className="map-intro">
+          A profissão que mais se encaixa no seu perfil é <strong>{map.cards[0].name}</strong>. Logo abaixo, veja por que ela combina com você
+          {data.diagnostic?.purchased ? ' e abra o seu Diagnóstico prático para começar a entrar nela.' : ' e como começar a entrar nela com o Diagnóstico prático.'}
+        </p>
+      )}
       <div className="card soft">
         {moment && <p><strong>Seu momento:</strong> {moment}</p>}
         {map.context.currentArea && <p><strong>Área atual:</strong> {map.context.currentArea}</p>}
