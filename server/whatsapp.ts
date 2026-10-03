@@ -14,7 +14,7 @@ export const sentMessages: AccessMessage[] = []; // inspeção em dev/testes
 export function accessText(m: Omit<AccessMessage, 'to'>, support: string): string {
   const intro =
     m.kind === 'purchase' ? 'seu pagamento foi confirmado e seu Mapa da Carreira está pronto.'
-      : m.kind === 'diagnostic' ? 'seu pagamento foi confirmado e seu Diagnóstico de Carreira está pronto.'
+      : m.kind === 'diagnostic' ? 'seu pagamento foi confirmado e seu Roteiro para começar está pronto.'
       : m.kind === 'free' ? 'seu Mapa da Carreira está pronto. Guarde este link para abrir quando quiser.'
         : 'aqui está seu link de acesso ao Mapa da Carreira.';
   return `Olá, ${m.name}! ${intro}\n\nAbra pelo link (uso único):\n${m.link}\n\nDúvidas: ${support}`;

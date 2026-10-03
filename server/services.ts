@@ -83,6 +83,7 @@ export async function sendMetaEvent(
   const viaRelay = !!(relayUrl && relaySecret);
   if (!viaRelay && !(pixelId && capiToken)) return;
   const a = e.attribution ?? {};
+  if (a.internal === '1') return; // teste do próprio admin não vai para a Meta
   if (a.consent !== 'granted') return; // respeita a escolha de rastreamento
   const data: any = {
     event_name: META_EVENT_NAMES[e.key],

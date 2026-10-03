@@ -273,8 +273,10 @@ function BarList({ rows, total, extra }: { rows: { label: string; value: number;
 
 export function Dashboard() {
   const [preset, setPreset] = useState<string>(storage.get('mc_dash_preset') ?? '7d');
-  const [from, setFrom] = useState(localToday(-6));
-  const [to, setTo] = useState(localToday());
+  // Já começa no período salvo: sem uma primeira consulta de "7 dias" correndo junto com a de "hoje".
+  const initial = (PRESETS.find((x) => x.id === preset)?.range() ?? [localToday(-6), localToday()]) as [string, string];
+  const [from, setFrom] = useState(initial[0]);
+  const [to, setTo] = useState(initial[1]);
   const [spendText, setSpendText] = useState(storage.get('mc_dash_spend') ?? '');
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -291,8 +293,14 @@ export function Dashboard() {
   }, [preset]);
 
   useEffect(() => {
+    // Só a resposta do período escolhido por último vale: respostas antigas que chegam depois são descartadas.
+    let current = true;
     setError(null);
-    api<Data>('GET', `/api/admin/analytics?from=${from}&to=${to}`).then(setData).catch((e) => setError((e as Error).message));
+    setData(null);
+    api<Data>('GET', `/api/admin/analytics?from=${from}&to=${to}`)
+      .then((d) => { if (current && d.range.from === from && d.range.to === to) setData(d); })
+      .catch((e) => { if (current) setError((e as Error).message); });
+    return () => { current = false; };
   }, [from, to]);
 
   const spend = Number(spendText.replace(/\./g, '').replace(',', '.')) || 0;
@@ -315,7 +323,7 @@ export function Dashboard() {
     const worst = steps.filter((s) => s.prev.value >= 5 && s.r != null).sort((a, b) => a.r! - b.r!)[0];
     if (worst) out.push(`Maior gargalo do funil: de “${worst.prev.label}” para “${worst.it.label}” passam só ${fmtPct(worst.r, 0)}.`);
     if (data.mode === 'free') {
-      if (data.leads.total > 0) out.push(`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads pediram o trajeto/diagnóstico: este é o principal sinal de demanda para a versão paga.`);
+      if (data.leads.total > 0) out.push(`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads clicaram na oferta do roteiro: este é o principal sinal de demanda para a versão paga.`);
       if (k.f.completed > 0) out.push(`${fmtPct(pct(data.leads.total, k.f.completed), 0)} de quem terminou o teste deixou nome e WhatsApp.`);
     }
     if (data.mode === 'paid' && k.neededConv != null && k.conv != null) {
@@ -327,7 +335,7 @@ export function Dashboard() {
     if (data.orders.pixGenerated >= 3 && pixRate != null) out.push(`${fmtPct(pixRate, 0)} de quem gerou o Pix pagou${data.orders.medianMinutesToPay != null ? `, em ${fmtMin(data.orders.medianMinutesToPay)} (mediana)` : ''}.`);
     const goal = (x: Data['sources'][number]) => (data.mode === 'free' ? x.interested : x.paid);
     const bestAd = data.sources.filter((s) => s.sessions >= 5 && s.source !== '(sem UTM / direto)').sort((a, b) => (goal(b) / b.sessions) - (goal(a) / a.sessions) || (b.completed / b.sessions) - (a.completed / a.sessions))[0];
-    if (bestAd) out.push(`Melhor anúncio: “${bestAd.source}” — ${fmtPct(pct(bestAd.completed, bestAd.sessions), 0)} terminam o teste e ${fmtPct(pct(goal(bestAd), bestAd.sessions))} ${data.mode === 'free' ? 'pedem o diagnóstico' : 'compram'}.`);
+    if (bestAd) out.push(`Melhor anúncio: “${bestAd.source}” — ${fmtPct(pct(bestAd.completed, bestAd.sessions), 0)} terminam o teste e ${fmtPct(pct(goal(bestAd), bestAd.sessions))} ${data.mode === 'free' ? 'clicam na oferta' : 'compram'}.`);
     const granted = data.consent.find((c) => c.key === 'granted')?.c ?? 0;
     const allConsent = data.consent.reduce((s, c) => s + c.c, 0);
     if (allConsent >= 10) out.push(`${fmtPct(pct(granted, allConsent), 0)} das visitas aceitaram cookies; só essas aparecem no Pixel da Meta.`);
@@ -349,6 +357,10 @@ export function Dashboard() {
       </div>
 
       {error && <div className="status error">{error}</div>}
+      <p className="small muted" style={{ margin: '4px 0 10px' }}>
+        Mostrando: <strong>{from === to ? fmtDay(from) : `${fmtDay(from)} a ${fmtDay(to)}`}</strong>
+        {from === to && from === localToday() ? ' (hoje, desde 00:00 de Brasília)' : ''}
+      </p>
       {!data || !k ? <div className="spinner dark" aria-label="Carregando" /> : (
         <>
           <div className="viz-tiles">
@@ -358,7 +370,7 @@ export function Dashboard() {
             {data.mode === 'free' ? (
               <>
                 <Tile label="Leads (nome + WhatsApp)" value={fmtInt(data.leads.total)} sub={`${fmtPct(pct(data.leads.total, k.f.completed), 0)} de quem terminou`} />
-                <Tile label="Interesse no diagnóstico" value={fmtInt(data.leads.interested)} sub={`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads`} />
+                <Tile label="Clicaram na oferta" value={fmtInt(data.leads.interested)} sub={`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads`} />
                 <Tile label="Custo por lead" value={spend > 0 && data.leads.total ? brl(Math.round((spend / data.leads.total) * 100)) : '—'} sub={spend > 0 ? undefined : 'informe o investimento'} />
                 <Tile label="Custo por interessado" value={spend > 0 && data.leads.interested ? brl(Math.round((spend / data.leads.interested) * 100)) : '—'} sub="sinal de demanda" />
               </>
@@ -449,7 +461,7 @@ export function Dashboard() {
               <h3>Contatos</h3>
               <div className="viz-tiles small">
                 <Tile label="Leads" value={fmtInt(data.leads.total)} />
-                <Tile label="Pediram diagnóstico" value={fmtInt(data.leads.interested)} sub={fmtPct(pct(data.leads.interested, data.leads.total), 0)} />
+                <Tile label="Clicaram na oferta" value={fmtInt(data.leads.interested)} sub={fmtPct(pct(data.leads.interested, data.leads.total), 0)} />
                 <Tile label="Autorizaram nome nas notificações" value={fmtInt(data.leads.publicNameOk)} sub={fmtPct(pct(data.leads.publicNameOk, data.leads.total), 0)} />
               </div>
             </section>}
@@ -477,7 +489,7 @@ export function Dashboard() {
             </section>
             <section className="viz-card">
               <h3>Resultados</h3>
-              <p className="viz-sub">1º caminho sugerido · {data.mode === 'free' ? 'interesse no diagnóstico' : 'compras'} de quem recebeu</p>
+              <p className="viz-sub">1º caminho sugerido · {data.mode === 'free' ? 'cliques na oferta' : 'compras'} de quem recebeu</p>
               <BarList extra="paid" rows={data.profile.topCareer.map((c) => ({ label: c.key, value: c.c, extra: data.mode === 'free' ? `${c.interested} interesse(s)` : `${c.paid} compra(s)` }))} total={data.profile.topCareer.reduce((s, c) => s + c.c, 0)} />
               <p className="viz-sub" style={{ marginTop: 16 }}>Duas preferências mais fortes</p>
               <BarList rows={data.profile.preferences.map((c) => ({ label: c.key, value: c.c }))} total={data.profile.preferences.reduce((s, c) => s + c.c, 0)} />

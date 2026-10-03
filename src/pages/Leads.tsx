@@ -79,7 +79,7 @@ export function Leads() {
       <div className="viz-toolbar">
         <div className="viz-presets" role="group" aria-label="Filtro">
           <button type="button" aria-pressed={!onlyInterest} onClick={() => setOnlyInterest(false)}>Todos</button>
-          <button type="button" aria-pressed={onlyInterest} onClick={() => setOnlyInterest(true)}>Só interessados no diagnóstico</button>
+          <button type="button" aria-pressed={onlyInterest} onClick={() => setOnlyInterest(true)}>Só quem clicou na oferta</button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="btn secondary" style={{ width: 'auto', minHeight: 40, color: '#b42318' }} onClick={purge} disabled={!sel.size || busy}>
@@ -92,7 +92,7 @@ export function Leads() {
       {notice && <div className="status ok" role="status">{notice}</div>}
       {!leads ? <div className="spinner dark" /> : (
         <>
-          <p className="small muted">{total} lead(s){!onlyInterest && ` · ${interested} com interesse no diagnóstico`}. Mostrando os 1.000 mais recentes.</p>
+          <p className="small muted">{total} lead(s){!onlyInterest && ` · ${interested} clicaram na oferta do roteiro`}. Mostrando os 1.000 mais recentes.</p>
           <div className="viz-table-wrap">
             <table className="admin">
               <thead><tr><th><input type="checkbox" aria-label="Selecionar todos" checked={leads.length > 0 && sel.size === leads.length}

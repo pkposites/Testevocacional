@@ -60,7 +60,7 @@ export function seoFor(pathname: string): PageSeo {
 export const FAQ: { q: string; a: string }[] = [
   {
     q: 'O teste vocacional é grátis?',
-    a: 'Sim. Você responde as 18 perguntas e recebe grátis os 5 caminhos que mais combinam com suas respostas, o motivo de cada um e um plano de 7 dias para testar. Depois, se quiser, pode comprar o roteiro prático de um caminho.',
+    a: 'Sim. Você responde as 18 perguntas e recebe grátis os 5 caminhos que mais combinam com suas respostas, o motivo de cada um e um plano de 7 dias para testar. Depois, se quiser, pode comprar o Roteiro para começar no caminho que escolher: formação exigida, primeiro projeto e onde buscar as primeiras vagas.',
   },
   {
     q: 'Quanto tempo leva?',

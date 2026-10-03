@@ -56,8 +56,8 @@ export function DiagnosticPage() {
   if (error) {
     return (
       <div className="wrap">
-        <h1>{error.status === 402 ? 'Diagnóstico ainda não liberado' : error.status === 403 ? 'Acesso não liberado neste aparelho' : 'Não foi possível abrir o diagnóstico'}</h1>
-        <p>{error.status === 402 ? 'Você pode liberar o diagnóstico pelo seu mapa.' : error.status === 403 ? 'Abra o acesso com seu WhatsApp e o código do pedido (DG-… ou MC-…).' : error.message}</p>
+        <h1>{error.status === 402 ? 'Roteiro ainda não liberado' : error.status === 403 ? 'Acesso não liberado neste aparelho' : 'Não foi possível abrir o roteiro'}</h1>
+        <p>{error.status === 402 ? 'Você pode liberar o roteiro pelo seu mapa.' : error.status === 403 ? 'Abra o acesso com seu WhatsApp e o código do pedido (DG-… ou MC-…).' : error.message}</p>
         {error.status === 402 ? <Link className="btn" to={`/mapa/${resultId}#diagnostico`}>Voltar ao mapa</Link> : <Link className="btn" to="/acesso">Recuperar meu acesso</Link>}
       </div>
     );
@@ -70,10 +70,10 @@ export function DiagnosticPage() {
 
   return (
     <div className="wrap diag-page">
-      <span className="diag-badge"><SparkIcon size={14} /> Diagnóstico de Carreira</span>
+      <span className="diag-badge"><SparkIcon size={14} /> Roteiro para começar</span>
       <h1 style={{ marginTop: 10 }}>
         {d.career.dim && <span className="career-icon"><DimIcon dim={d.career.dim} size={20} /></span>}
-        {data.buyer_first_name}, seu diagnóstico de {d.career.name}
+        {data.buyer_first_name}, seu Roteiro para começar em {d.career.name}
       </h1>
       <p>{d.headline}</p>
       <div className="dg-stats">
@@ -97,7 +97,7 @@ export function DiagnosticPage() {
 
       {data.cards.length > 1 && (
         <label className="small no-print" style={{ display: 'block', margin: '6px 0 14px' }}>
-          Ver o diagnóstico de outro caminho do seu mapa:{' '}
+          Ver o roteiro de outro caminho do seu mapa:{' '}
           <select value={d.career.id} onChange={(e) => setCareer(e.target.value)}>
             {data.cards.map((c) => <option key={c.careerId} value={c.careerId}>{c.name}{c.match !== null ? ` (${c.match}%)` : ''}</option>)}
           </select>

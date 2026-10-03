@@ -18,6 +18,10 @@ import { accessText } from './whatsapp';
 const S_COOKIE = 'mc_s';
 const A_COOKIE = 'mc_a';
 const ADM_COOKIE = 'mc_adm';
+/** Aparelho do admin: o que for feito nele não entra em métricas, leads, relatório nem Meta. */
+const INT_COOKIE = 'mc_int';
+const isInternal = (ctx: Ctx) => ctx.cookies[INT_COOKIE] === '1';
+const NOT_INTERNAL = (a = '') => `coalesce(${a}attribution->>'internal', '') <> '1'`;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECOVER_TTL_MIN = 30;
 const ACCESS_SESSION_DAYS = 30;
@@ -140,6 +144,11 @@ async function limit(app: App, ctx: Ctx, bucket: string, max: number, windowSec:
 }
 
 async function recordEvent(app: App, e: { eventId: string; name: string; sessionId?: string; orderId?: string; attribution?: unknown; consent?: string }) {
+  if ((e.attribution as any)?.internal === '1') return;
+  if (!e.attribution && e.sessionId) {
+    const s = await one(app.db, `select attribution->>'internal' as i from quiz_sessions where id = $1`, [e.sessionId]);
+    if (s?.i === '1') return;
+  }
   await app.db.query(
     `insert into events (event_id, session_id, order_id, name, attribution, consent_state) values ($1,$2,$3,$4,$5::jsonb,$6) on conflict (event_id) do nothing`,
     [e.eventId, e.sessionId ?? null, e.orderId ?? null, e.name, JSON.stringify(e.attribution ?? {}), e.consent ?? 'unknown'],
@@ -191,6 +200,7 @@ route('GET', '/api/config', async (app, ctx) =>
     dev_tools: app.cfg.paymentProvider === 'fake' && app.cfg.env !== 'production',
     whatsapp_auto: app.messages.enabled,
     offer_mode: app.cfg.offerMode,
+    internal: isInternal(ctx),
     diagnostic_mode: app.cfg.diagnosticMode,
     diagnostic_price_cents: app.cfg.diagnosticPriceCents,
   }),
@@ -205,7 +215,7 @@ route('POST', '/api/quiz/sessions', async (app, ctx) => {
   const row = await one(
     app.db,
     `insert into quiz_sessions (session_token_hash, quiz_version, attribution) values ($1,$2,$3::jsonb) returning id, quiz_version`,
-    [sha256(tok), QUIZ_VERSION, JSON.stringify({ ...cleanAttribution(body.attribution), ...trackingContext(ctx, body) })],
+    [sha256(tok), QUIZ_VERSION, JSON.stringify({ ...cleanAttribution(body.attribution), ...trackingContext(ctx, body), ...(isInternal(ctx) ? { internal: '1' } : {}) })],
   );
   ctx.setCookies.push(cookie(S_COOKIE, tok, { maxAgeSec: 90 * 86400, secure: secure(app) }));
   return json(ctx, 201, { session_id: row!.id, quiz_version: row!.quiz_version });
@@ -402,7 +412,7 @@ async function ensureCheckout(app: App, order: any, forceNew = false): Promise<v
       amountCents: order.amount_cents,
       buyerPhone: order.buyer_phone,
       buyerName: order.buyer_name,
-      description: isDiagnosticRef(order.public_ref) ? 'Diagnóstico de Carreira — plano de 4 semanas' : 'Mapa da Carreira — 5 caminhos e plano de 7 dias',
+      description: isDiagnosticRef(order.public_ref) ? 'Roteiro para começar · Mapa da Carreira' : 'Mapa da Carreira — 5 caminhos e plano de 7 dias',
       attribution: order.attribution ?? {},
     });
   } catch (e) {
@@ -552,8 +562,10 @@ route('POST', '/api/leads', async (app, ctx) => {
       [publicRef(), resultId, s.id, name, phone, !!body.marketing_opt_in, publicNameOk, JSON.stringify(attribution)],
     );
     await t.query(`insert into entitlements (order_id, result_id, buyer_phone, state) values ($1,$2,$3,'active') on conflict (order_id) do nothing`, [o!.id, resultId, phone]);
-    await t.query(`insert into events (event_id, session_id, order_id, name, attribution, consent_state) values ($1,$2,$3,'Lead',$4::jsonb,$5) on conflict (event_id) do nothing`,
-      [eventIds.lead(o!.id), s.id, o!.id, JSON.stringify(cleanAttribution(attribution)), attribution.consent ?? 'unknown']);
+    if (attribution.internal !== '1') {
+      await t.query(`insert into events (event_id, session_id, order_id, name, attribution, consent_state) values ($1,$2,$3,'Lead',$4::jsonb,$5) on conflict (event_id) do nothing`,
+        [eventIds.lead(o!.id), s.id, o!.id, JSON.stringify(cleanAttribution(attribution)), attribution.consent ?? 'unknown']);
+    }
     if (app.messages.enabled) await t.query(`insert into message_outbox (order_id, kind, to_phone) values ($1,'free',$2)`, [o!.id, phone]);
     return o;
   });
@@ -577,7 +589,7 @@ route('POST', '/api/interest', async (app, ctx) => {
     [ent.order_id],
   );
   const eventId = eventIds.interest(order!.id);
-  const ins = await one(app.db,
+  const ins = order!.attribution?.internal === '1' ? null : await one(app.db,
     `insert into events (event_id, session_id, order_id, name, attribution, consent_state) values ($1,$2,$3,'DiagnosticInterest',$4::jsonb,$5)
      on conflict (event_id) do nothing returning id`,
     [eventId, order!.session_id, order!.id, JSON.stringify(cleanAttribution(order!.attribution)), order!.attribution?.consent ?? 'unknown']);
@@ -609,7 +621,7 @@ route('GET', '/api/social-proof', async (app, ctx) => {
     `select o.buyer_name, o.public_name_ok, r.snapshot->'cards'->0->>'name' as career,
        extract(epoch from (now() - o.created_at)) / 60 as minutes
      from orders o join results r on r.id = o.result_id
-     where o.status in ('paid','refunded','disputed') and ${MAP_ONLY('o')} and o.created_at > now() - interval '72 hours'
+     where o.status in ('paid','refunded','disputed') and ${MAP_ONLY('o')} and ${NOT_INTERNAL('o.')} and o.created_at > now() - interval '72 hours'
      order by o.created_at desc limit 8`,
   );
   const today = await one<{ n: number }>(app.db,
@@ -809,7 +821,7 @@ async function diagnosticState(app: App, resultId: string) {
 }
 
 route('POST', '/api/diagnostic/orders', async (app, ctx) => {
-  if (app.cfg.diagnosticMode !== 'paid') throw new ApiError(409, 'diagnostic_waitlist', 'O diagnóstico ainda não está à venda. Entre na lista para ser avisado.');
+  if (app.cfg.diagnosticMode !== 'paid') throw new ApiError(409, 'diagnostic_waitlist', 'O roteiro ainda não está à venda. Entre na lista para ser avisado.');
   await limit(app, ctx, 'dg-orders', 20, 600);
   const body = await readJson(ctx);
   const ent = await authorizeResult(app, ctx, String(body.result_id ?? ''));
@@ -841,10 +853,28 @@ route('POST', '/api/diagnostic/orders', async (app, ctx) => {
   return json(ctx, 200, await orderView(app, order));
 });
 
+/** Amostra real do roteiro (antes de comprar): o "faça hoje", o requisito de entrada e o começo do primeiro projeto. */
+route('GET', '/api/diagnostic/:id/sample', async (app, ctx) => {
+  const ent = await authorizeResult(app, ctx, ctx.params.id);
+  const res = await one(app.db, 'select snapshot, answers from results where id = $1', [ent.result_id]);
+  const d = buildDiagnostic(res!.snapshot as ResultSnapshot, res!.answers, ctx.url.searchParams.get('career') ?? undefined);
+  const firstSentence = (t: string) => t.split(/(?<=\.)\s/)[0];
+  return json(ctx, 200, {
+    career: d.career,
+    today: d.today,
+    requirement: firstSentence(d.formation.text),
+    path: d.formation.path,
+    proof_teaser: d.proof.length > 70 ? `${d.proof.slice(0, 70).replace(/\s+\S*$/, '')}…` : d.proof,
+    weeks: d.weeks.map((w) => w.title),
+    tasks: d.weeks.reduce((n, w) => n + w.tasks.length, 0),
+    first_jobs_count: d.firstJobs.length,
+  });
+});
+
 route('GET', '/api/diagnostic/:id', async (app, ctx) => {
   const ent = await authorizeResult(app, ctx, ctx.params.id);
   const st = await diagnosticState(app, ent.result_id);
-  if (!st.purchased) throw new ApiError(402, 'diagnostic_not_purchased', 'O diagnóstico deste mapa ainda não foi liberado.');
+  if (!st.purchased) throw new ApiError(402, 'diagnostic_not_purchased', 'O roteiro deste mapa ainda não foi liberado.');
   const res = await one(app.db, 'select snapshot, answers from results where id = $1', [ent.result_id]);
   const careerId = ctx.url.searchParams.get('career') ?? ent.selected_career_id ?? undefined;
   const snapshot = res!.snapshot as ResultSnapshot;
@@ -916,6 +946,7 @@ route('POST', '/api/events', async (app, ctx) => {
   const name = String(body.name ?? '');
   const eventId = String(body.event_id ?? '').slice(0, 100);
   if (!BROWSER_EVENTS.has(name) || !eventId) throw new ApiError(400, 'invalid_event', 'Evento inválido.');
+  if (isInternal(ctx)) return json(ctx, 202, { ok: true, internal: true });
   const s = await getQuizSession(app, ctx);
   await recordEvent(app, {
     eventId,
@@ -960,19 +991,19 @@ route('GET', '/api/admin/report', async (app, ctx) => {
   const win = async (h: number) => {
     const since = `now() - interval '${h} hours'`;
     const r = await one(app.db, `select
-        (select count(*) from quiz_sessions where created_at > ${since})::int as testes_iniciados,
-        (select count(*) from results where created_at > ${since})::int as testes_concluidos,
-        (select count(*) from orders where provider = 'free' and public_ref not like 'DG-%' and created_at > ${since})::int as leads,
-        (select count(*) from orders where public_ref not like 'DG-%' and diagnostic_interest_at > ${since})::int as cliques_oferta,
-        (select count(*) from orders where public_ref like 'DG-%' and created_at > ${since})::int as pix_gerados,
-        (select count(*) from orders where public_ref like 'DG-%' and status = 'paid' and paid_at > ${since})::int as vendas,
-        (select coalesce(sum(amount_cents), 0) from orders where public_ref like 'DG-%' and status = 'paid' and paid_at > ${since})::int as receita_centavos`);
+        (select count(*) from quiz_sessions where created_at > ${since} and ${NOT_INTERNAL()})::int as testes_iniciados,
+        (select count(*) from results where created_at > ${since} and session_id not in (select id from quiz_sessions where attribution->>'internal' = '1'))::int as testes_concluidos,
+        (select count(*) from orders where ${NOT_INTERNAL()} and provider = 'free' and public_ref not like 'DG-%' and created_at > ${since})::int as leads,
+        (select count(*) from orders where ${NOT_INTERNAL()} and public_ref not like 'DG-%' and diagnostic_interest_at > ${since})::int as cliques_oferta,
+        (select count(*) from orders where ${NOT_INTERNAL()} and public_ref like 'DG-%' and created_at > ${since})::int as pix_gerados,
+        (select count(*) from orders where ${NOT_INTERNAL()} and public_ref like 'DG-%' and status = 'paid' and paid_at > ${since})::int as vendas,
+        (select coalesce(sum(amount_cents), 0) from orders where ${NOT_INTERNAL()} and public_ref like 'DG-%' and status = 'paid' and paid_at > ${since})::int as receita_centavos`);
     return r;
   };
   const byAd = await app.db.query(`select coalesce(o.attribution->>'utm_content', '(direto)') as anuncio,
       count(*) filter (where o.provider = 'free')::int as leads,
       count(*) filter (where o.public_ref like 'DG-%' and o.status = 'paid')::int as vendas
-    from orders o where o.created_at > now() - interval '${hours} hours' group by 1 order by 2 desc limit 15`);
+    from orders o where o.created_at > now() - interval '${hours} hours' and ${NOT_INTERNAL('o.')} group by 1 order by 2 desc limit 15`);
   return json(ctx, 200, {
     gerado_em: new Date().toISOString(),
     preco_centavos: app.cfg.diagnosticPriceCents,
@@ -1026,8 +1057,20 @@ route('POST', '/api/admin/login', async (app, ctx) => {
   // Login certo zera o contador: só tentativas erradas acumulam para o bloqueio.
   await app.db.query('delete from rate_limits where key = $1', [`admin-login:${clientIp(ctx.req)}`]);
   const exp = Date.now() + ADMIN_SESSION_SEC * 1000;
+  // Marca este aparelho como interno (e o teste que estiver aberto nele).
+  ctx.setCookies.push(cookie(INT_COOKIE, '1', { maxAgeSec: 365 * 86400, secure: secure(app) }));
+  const own = await getQuizSession(app, ctx);
+  if (own) await app.db.query(`update quiz_sessions set attribution = attribution || '{"internal":"1"}'::jsonb where id = $1`, [own.id]);
   ctx.setCookies.push(cookie(ADM_COOKIE, adminToken(app, exp), { maxAgeSec: ADMIN_SESSION_SEC, secure: secure(app), path: '/api/admin' }));
   return json(ctx, 200, { ok: true });
+});
+
+route('POST', '/api/admin/device', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const body = await readJson(ctx);
+  const on = body.internal !== false;
+  ctx.setCookies.push(cookie(INT_COOKIE, on ? '1' : '', { maxAgeSec: on ? 365 * 86400 : 0, secure: secure(app) }));
+  return json(ctx, 200, { ok: true, internal: on });
 });
 
 route('GET', '/api/admin/me', async (app, ctx) => {
@@ -1038,7 +1081,7 @@ route('GET', '/api/admin/me', async (app, ctx) => {
     } catch {
       return json(ctx, 200, { ok: false });
     }
-    return json(ctx, 200, { ok: true });
+    return json(ctx, 200, { ok: true, internal: isInternal(ctx) });
   }
   requireAdmin(app, ctx);
   return json(ctx, 200, { ok: true });
@@ -1144,7 +1187,7 @@ route('GET', '/api/admin/leads', async (app, ctx) => {
        (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done,
        (select ev.attribution from events ev where ev.event_id = 'interestdetail_' || o.id) as interest_detail
      from orders o join results r on r.id = o.result_id
-     where o.provider = 'free' and ${MAP_ONLY('o')} ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
+     where o.provider = 'free' and ${MAP_ONLY('o')} and ${NOT_INTERNAL('o.')} ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
      order by coalesce(o.diagnostic_interest_at, o.created_at) desc limit 1000`,
   );
   return json(ctx, 200, { leads: rows });

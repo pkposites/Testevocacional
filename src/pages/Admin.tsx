@@ -3,7 +3,7 @@ import { formatBrPhone } from '../../shared/phone';
 import { api, ApiFailure, brl } from '../api';
 import { Dashboard } from './Dashboard';
 import { Leads } from './Leads';
-import { AdminPush, useAdminManifest } from '../components/AdminPush';
+import { AdminPush, InternalDevice, useAdminManifest } from '../components/AdminPush';
 
 const dt = (v?: string | null) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
 
@@ -122,7 +122,7 @@ export function Admin() {
         <button role="tab" aria-selected={tab === 'leads'} onClick={() => setTab('leads')}>Leads</button>
         <button role="tab" aria-selected={tab === 'pedidos'} onClick={() => setTab('pedidos')}>Pedidos</button>
       </div>
-      {tab === 'painel' && <AdminPush />}
+      {tab === 'painel' && <><AdminPush /><InternalDevice /></>}
       {tab === 'painel' ? <Dashboard key={`d${refreshKey}`} /> : tab === 'leads' ? <Leads key={`l${refreshKey}`} /> : <>
       {msg && <div className="status info">{msg}</div>}
       {share && (

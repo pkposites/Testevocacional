@@ -104,12 +104,13 @@ export function Preview() {
         <span className="pill">Seu resultado</span>
         {topCareer ? (
           <div className="top-hit">
-            <span className="th-label">A profissão que mais combina com você</span>
+            <span className="th-label">O caminho que mais combina com suas respostas</span>
             <div className="th-name">
               {topCareer.dim && <span className="th-icon"><DimIcon dim={topCareer.dim} size={24} /></span>}
               <strong>{topCareer.name}</strong>
             </div>
-            {topMatch !== null && <span className="th-match">{topMatch}% de afinidade com as suas respostas</span>}
+            {topMatch !== null && <span className="th-match">{topMatch}% de afinidade</span>}
+            <span className="th-note">Entre 24 caminhos, é o que mais combina com o que você disse gostar de fazer. Mostra afinidade, não talento.</span>
           </div>
         ) : (
           <h1 style={{ marginTop: 10 }}>Seu resultado está pronto</h1>
@@ -169,7 +170,7 @@ export function Preview() {
 
         <div className="pv-next">
           <span className="pv-next-tag">Depois, se quiser</span>
-          <strong>Roteiro prático{topCareer ? ` de ${topCareer.name}` : ''}{paidDiag ? ` · ${brl(cfg.diagnostic_price_cents!)}` : ''}</strong>
+          <strong>Roteiro para começar{topCareer ? ` em ${topCareer.name}` : ''}{paidDiag ? ` · ${brl(cfg.diagnostic_price_cents!)}` : ''}</strong>
           <span>O que pesquisar, requisitos e formação para entrar, e uma atividade da rotina para testar antes de investir.</span>
         </div>
 

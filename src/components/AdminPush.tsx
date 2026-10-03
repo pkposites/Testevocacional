@@ -103,3 +103,24 @@ export function AdminPush() {
     </div>
   );
 }
+
+/** Mostra (e permite desfazer) a marcação de aparelho interno. */
+export function InternalDevice() {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    api('GET', '/api/admin/me?optional=1').then((r) => setOn(!!r.internal)).catch(() => setOn(null));
+  }, []);
+  if (on === null) return null;
+  async function toggle() {
+    const r = await api('POST', '/api/admin/device', { internal: !on });
+    setOn(!!r.internal);
+  }
+  return (
+    <p className="small muted" style={{ margin: '-6px 0 12px' }}>
+      {on ? '✓ Este aparelho não conta nas métricas (visitas, testes e leads feitos aqui ficam de fora).' : 'Este aparelho está contando nas métricas.'}{' '}
+      <button type="button" className="btn link" style={{ width: 'auto', display: 'inline', padding: 0, minHeight: 0 }} onClick={toggle}>
+        {on ? 'Voltar a contar' : 'Não contar este aparelho'}
+      </button>
+    </p>
+  );
+}

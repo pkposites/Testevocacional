@@ -33,7 +33,7 @@ export function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
         <h3>Natureza do resultado</h3>
         <p>Ferramenta de exploração baseada em preferências declaradas. Não é avaliação psicológica, teste de aptidão nem garantia de carreira, emprego ou renda. O catálogo contém {CATALOG_SIZE} caminhos e não cobre todas as profissões.</p>
         <h3>Seus dados</h3>
-        <p>Pedimos primeiro nome e WhatsApp para liberar e guardar o seu mapa e falar com você sobre o resultado. Se você marcar interesse no trajeto/diagnóstico, poderemos te chamar no WhatsApp quando ele estiver disponível. Seu primeiro nome só aparece nas notificações do site se você autorizar. Você pode pedir a exclusão a qualquer momento pelo contato acima.</p>
+        <p>Pedimos primeiro nome e WhatsApp para liberar e guardar o seu mapa e falar com você sobre o resultado. Se você autorizar receber novidades, poderemos te chamar no WhatsApp. Seu primeiro nome só aparece nas notificações do site se você autorizar. Você pode pedir a exclusão a qualquer momento pelo contato acima.</p>
       </div>
     );
   }

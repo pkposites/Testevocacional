@@ -28,6 +28,7 @@ async function loadPixel() {
   if (pixelLoaded || getConsent() !== 'granted') return;
   const cfg = await getConfig().catch(() => null);
   if (!cfg?.meta_pixel_id) return;
+  if (cfg.internal) return; // aparelho do admin: não alimenta o Pixel da Meta
   pixelLoaded = true;
   /* eslint-disable */
   (function (f: any, b: any, e: any, v: any) {

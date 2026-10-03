@@ -16,6 +16,11 @@ export function parseRange(from: string | null, to: string | null): Range {
 
 const n = (v: unknown) => Number(v ?? 0);
 
+// Testes feitos no aparelho do admin (marcados como internos) não entram nos números.
+const S_OK = (a = '') => `coalesce(${a}attribution->>'internal', '') <> '1'`;
+const R_OK = (a = '') => `${a}session_id not in (select id from quiz_sessions where attribution->>'internal' = '1')`;
+const O_OK = S_OK;
+
 export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid' = 'paid') {
   // [$1, $2): meia-noite local do primeiro dia até a meia-noite seguinte ao último.
   const bounds = `($1::date::timestamp at time zone '${TZ}')`;
@@ -35,14 +40,14 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
        ${qCols},
        count(*) filter (where jsonb_exists(s.context, 'moment') and jsonb_exists(s.context, 'dailyTime'))::int as context_done,
        count(*) filter (where exists (select 1 from results r where r.session_id = s.id))::int as with_result
-     from quiz_sessions s where s.created_at >= ${bounds} and s.created_at < ${boundsEnd}`,
+     from quiz_sessions s where s.created_at >= ${bounds} and s.created_at < ${boundsEnd} and ${S_OK('s.')}`,
     p,
   ).then((r) => r[0]);
 
   const minutesToResultP = db.query(
     `select percentile_cont(0.5) within group (order by extract(epoch from (r.first_at - s.created_at)) / 60) as med
      from quiz_sessions s join (select session_id, min(created_at) as first_at from results group by session_id) r on r.session_id = s.id
-     where s.created_at >= ${bounds} and s.created_at < ${boundsEnd}`,
+     where s.created_at >= ${bounds} and s.created_at < ${boundsEnd} and ${S_OK('s.')}`,
     p,
   ).then((r) => r[0]?.med);
 
@@ -52,7 +57,7 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
              count(distinct coalesce(session_id::text, order_id::text, event_id))::int as c
            from events where ts >= ${bounds} and ts < ${boundsEnd} group by 1, 2),
      o as (select to_char((paid_at at time zone '${TZ}')::date, 'YYYY-MM-DD') as day, sum(amount_cents)::int as revenue
-           from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0 group by 1)
+           from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0 and ${O_OK()} group by 1)
      select d.day,
        coalesce((select c from e where e.day = d.day and name = 'PageView'), 0) as visits,
        coalesce((select c from e where e.day = d.day and name = 'GameStart'), 0) as started,
@@ -77,14 +82,14 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
        count(*) filter (where o.status in ('refunded','disputed'))::int as refunded,
        percentile_cont(0.5) within group (order by extract(epoch from (o.paid_at - o.created_at)) / 60)
          filter (where o.paid_at is not null) as med_minutes_to_pay
-     from orders o where o.created_at >= ${bounds} and o.created_at < ${boundsEnd}`,
+     from orders o where o.created_at >= ${bounds} and o.created_at < ${boundsEnd} and ${O_OK('o.')}`,
     p,
   ).then((r) => r[0]);
 
   const revenueP = db.query(
     `select coalesce(sum(amount_cents) filter (where status = 'paid'), 0)::int as net_cents,
        coalesce(sum(amount_cents), 0)::int as gross_cents, count(*)::int as purchases
-     from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0`,
+     from orders where paid_at >= ${bounds} and paid_at < ${boundsEnd} and status in ('paid','refunded','disputed') and amount_cents > 0 and ${O_OK()}`,
     p,
   ).then((r) => r[0]);
 
@@ -93,7 +98,7 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
        select id, answers,
          coalesce(nullif(attribution->>'utm_content', ''), nullif(attribution->>'utm_source', ''), '(sem UTM / direto)') as source,
          coalesce(attribution->>'utm_term', '') as adset
-       from quiz_sessions where created_at >= ${bounds} and created_at < ${boundsEnd}),
+       from quiz_sessions where created_at >= ${bounds} and created_at < ${boundsEnd} and ${S_OK()}),
      r as (select distinct session_id from results),
      o as (select session_id, count(*) filter (where provider <> 'free')::int as orders,
              count(*) filter (where status in ('paid','refunded','disputed') and provider <> 'free')::int as paid,
@@ -117,25 +122,25 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
   const profileP = Promise.all([
     /* moments */ db.query(
       `select coalesce(context->>'moment', '(sem)') as key, count(*)::int as c from results
-       where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc`, p),
+       where created_at >= ${bounds} and created_at < ${boundsEnd} and ${R_OK()} group by 1 order by c desc`, p),
     /* dailyTime */ db.query(
       `select coalesce(context->>'dailyTime', '(sem)') as key, count(*)::int as c from results
-       where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc`, p),
+       where created_at >= ${bounds} and created_at < ${boundsEnd} and ${R_OK()} group by 1 order by c desc`, p),
     /* preferences */ db.query(
       `select (snapshot->'summary'->'topDimensions'->0->>'label') || ' + ' || (snapshot->'summary'->'topDimensions'->1->>'label') as key,
          count(*)::int as c,
          count(*) filter (where (snapshot->>'broadProfile')::boolean)::int as broad
-       from results where created_at >= ${bounds} and created_at < ${boundsEnd} group by 1 order by c desc limit 10`, p),
+       from results where created_at >= ${bounds} and created_at < ${boundsEnd} and ${R_OK()} group by 1 order by c desc limit 10`, p),
     /* topCareer */ db.query(
       `select r.snapshot->'cards'->0->>'name' as key, count(*)::int as c,
          count(o.id) filter (where o.status in ('paid','refunded','disputed') and o.provider <> 'free')::int as paid,
          count(o.id) filter (where o.provider = 'free')::int as leads,
          count(o.id) filter (where o.diagnostic_interest_at is not null)::int as interested
        from results r left join orders o on o.result_id = r.id
-       where r.created_at >= ${bounds} and r.created_at < ${boundsEnd} group by 1 order by c desc`, p),
+       where r.created_at >= ${bounds} and r.created_at < ${boundsEnd} and ${R_OK('r.')} group by 1 order by c desc`, p),
     db.query(
       `select count(*) filter (where (snapshot->>'broadProfile')::boolean)::int as c from results
-       where created_at >= ${bounds} and created_at < ${boundsEnd}`, p).then((r) => n(r[0]?.c)),
+       where created_at >= ${bounds} and created_at < ${boundsEnd} and ${R_OK()}`, p).then((r) => n(r[0]?.c)),
   ]).then(([moments, dailyTime, preferences, topCareer, broad]) => ({ moments, dailyTime, preferences, topCareer, broad }));
 
   const deliveryP = db.query(
@@ -144,7 +149,8 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
        count(*) filter (where exists (select 1 from progress g where g.entitlement_id = e.id and g.checked))::int as plan_started,
        count(*) filter (where (select count(*) from progress g where g.entitlement_id = e.id and g.checked) >= 7)::int as plan_done,
        coalesce(avg((select count(*) from progress g where g.entitlement_id = e.id and g.checked)), 0)::float as avg_days
-     from entitlements e where e.created_at >= ${bounds} and e.created_at < ${boundsEnd}`,
+     from entitlements e where e.created_at >= ${bounds} and e.created_at < ${boundsEnd}
+       and e.order_id not in (select id from orders where attribution->>'internal' = '1')`,
     p,
   ).then((r) => r[0]);
   const decisionsP = db.query(
@@ -174,7 +180,9 @@ export async function buildAnalytics(db: Db, range: Range, mode: 'free' | 'paid'
       ...(mode === 'free'
         ? [
             { key: 'leads', label: 'Deixaram nome e WhatsApp', value: n(orders.leads) },
-            { key: 'interested', label: 'Têm interesse no diagnóstico', value: n(orders.interested) },
+            { key: 'interested', label: 'Clicaram na oferta do roteiro', value: n(orders.interested) },
+            { key: 'pix', label: 'Geraram o Pix do roteiro', value: n(orders.pix_generated) },
+            { key: 'paid', label: 'Compraram o roteiro', value: n(orders.paid) },
           ]
         : [
             { key: 'checkout_click', label: 'Clicaram em desbloquear', value: ev('CheckoutClick') },

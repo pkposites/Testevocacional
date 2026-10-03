@@ -34,6 +34,8 @@ export type PublicConfig = {
   dev_tools: boolean;
   whatsapp_auto: boolean;
   offer_mode: 'free' | 'paid';
+  /** Este aparelho é o do admin: não conta nas métricas. */
+  internal?: boolean;
   diagnostic_mode?: 'waitlist' | 'paid';
   diagnostic_price_cents?: number;
 };

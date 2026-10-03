@@ -101,7 +101,8 @@ export async function applyProviderState(db: Db, cfg: AppConfig, provider: strin
         [order.id, order.buyer_phone],
       );
       await t.query(
-        `insert into events (event_id, session_id, order_id, name, attribution) values ($1,$2,$3,'Purchase',$4::jsonb) on conflict (event_id) do nothing`,
+        `insert into events (event_id, session_id, order_id, name, attribution)
+         select $1,$2,$3,'Purchase',$4::jsonb where coalesce($4::jsonb->>'internal', '') <> '1' on conflict (event_id) do nothing`,
         [`purchase_${order.id}`, order.session_id, order.id, JSON.stringify(order.attribution ?? {})],
       );
       return { code: 'released', orderId: order.id, released: true };

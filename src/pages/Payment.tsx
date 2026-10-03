@@ -145,9 +145,9 @@ export function Payment() {
   if (o.status === 'paid') {
     return (
       <div className="wrap">
-        <div className="status ok" role="status">Pagamento confirmado! Abrindo seu {isDiag(o) ? 'diagnóstico' : 'mapa'}…</div>
-        <Link className="btn" to={destination(o)}>{isDiag(o) ? 'Abrir meu diagnóstico' : 'Abrir meu mapa'}</Link>
-        <p className="small muted" style={{ marginTop: 12 }}>Seu código é <strong>{o.public_ref}</strong>. Com ele e seu WhatsApp, você abre {isDiag(o) ? 'o diagnóstico' : 'o mapa'} em qualquer aparelho.</p>
+        <div className="status ok" role="status">Pagamento confirmado! Abrindo seu {isDiag(o) ? 'roteiro' : 'mapa'}…</div>
+        <Link className="btn" to={destination(o)}>{isDiag(o) ? 'Abrir meu roteiro' : 'Abrir meu mapa'}</Link>
+        <p className="small muted" style={{ marginTop: 12 }}>Seu código é <strong>{o.public_ref}</strong>. Com ele e seu WhatsApp, você abre {isDiag(o) ? 'o roteiro' : 'o mapa'} em qualquer aparelho.</p>
       </div>
     );
   }
@@ -191,7 +191,7 @@ export function Payment() {
 
   return (
     <div className="wrap">
-      <h1>Pague com Pix para liberar seu {isDiag(o) ? 'diagnóstico' : 'mapa'}</h1>
+      <h1>Pague com Pix para liberar seu {isDiag(o) ? 'Roteiro para começar' : 'mapa'}</h1>
       <div className="status info" role="status">
         <span className="spinner dark" aria-hidden="true" /> Estamos aguardando a confirmação do Pix
       </div>

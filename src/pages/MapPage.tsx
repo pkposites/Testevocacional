@@ -148,7 +148,7 @@ export function MapPage() {
       {!map.broadProfile && map.cards[0] && (
         <p className="map-intro">
           A profissão que mais se encaixa no seu perfil é <strong>{map.cards[0].name}</strong>. Logo abaixo, veja por que ela combina com você
-          {data.diagnostic?.purchased ? ' e abra o seu Diagnóstico prático para começar a entrar nela.' : ' e como começar a entrar nela com o Diagnóstico prático.'}
+          {data.diagnostic?.purchased ? ' e abra o seu Roteiro para começar.' : ' e como começar a entrar nela com o Roteiro para começar.'}
         </p>
       )}
       <div className="card soft">
@@ -165,6 +165,15 @@ export function MapPage() {
       {map.cards.map((c, idx) => (
         <Fragment key={c.careerId}>
         {idx === 0 && <h2 style={{ marginTop: 20 }}>Seu 1º caminho</h2>}
+        {idx === 0 && (
+          <details className="affinity-help">
+            <summary>O que significa a % de afinidade?</summary>
+            <p className="small">
+              Mostra o quanto suas respostas combinam com o que cada caminho exige no dia a dia (0 a 100), comparando com os {CATALOG_SIZE} caminhos do catálogo.
+              Quanto maior, mais as tarefas desse caminho tendem a te dar energia. <strong>Não mede talento nem chance de sucesso</strong>: diferenças de poucos pontos entre dois caminhos são um empate, então vale testar os dois.
+            </p>
+          </details>
+        )}
         {idx === 1 && <h2 style={{ marginTop: 24 }}>Seus outros {map.cards.length - 1} caminhos</h2>}
         <article className="card career">
           <div className="pos">{c.position}º caminho</div>
@@ -212,7 +221,9 @@ export function MapPage() {
         </article>
         {idx === 0 && !map.broadProfile && (
           <DiagnosticOffer
-            resultId={data.result_id} first={c} second={map.cards[1]} context={map.context}
+            resultId={data.result_id} cards={map.cards} selectedId={selected}
+            onSelect={(id) => { setSelected(id); void api('PUT', '/api/selection', { result_id: resultId, career_id: id }).catch(() => undefined); }}
+            context={map.context}
             firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail} diagnostic={data.diagnostic}
             onInterested={() => setInterest(true)}
           />
@@ -249,12 +260,12 @@ export function MapPage() {
 
       {map.broadProfile && <section className="card interest-card no-print" aria-labelledby="interest-title">
         <h2 id="interest-title">Quer ir além do mapa?</h2>
-        <p>Estamos preparando um trajeto personalizado, com um diagnóstico do caminho que você escolher e os próximos passos para começar.</p>
+        <p>Estamos preparando um trajeto personalizado, com um roteiro do caminho que você escolher e os próximos passos para começar.</p>
         {interest ? (
           <div className="status ok" role="status">Anotado! Vamos te chamar no WhatsApp quando o trajeto estiver disponível.</div>
         ) : (
           <button className="btn" onClick={markInterest} disabled={interestBusy}>
-            {interestBusy ? 'Registrando…' : 'Tenho interesse em receber um trajeto/diagnóstico'}
+            {interestBusy ? 'Registrando…' : 'Tenho interesse no Roteiro para começar'}
           </button>
         )}
         <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>Sem compromisso. Você só recebe uma mensagem quando estiver disponível.</p>
@@ -327,10 +338,10 @@ export function MapPage() {
 
       {!interest && (map.broadProfile ? (
         <button className="btn secondary no-print" style={{ marginBottom: 12 }} onClick={markInterest} disabled={interestBusy}>
-          Tenho interesse em receber um trajeto/diagnóstico
+          Tenho interesse no Roteiro para começar
         </button>
       ) : (
-        <a className="btn secondary no-print" style={{ marginBottom: 12 }} href="#diagnostico">Ver meu Diagnóstico de {map.cards[0].name}</a>
+        <a className="btn secondary no-print" style={{ marginBottom: 12 }} href="#diagnostico">Ver o Roteiro para começar em {map.cards[0].name}</a>
       ))}
       <button className="btn secondary no-print" onClick={printMap}>Salvar ou imprimir</button>
       {!map.broadProfile && map.cards[0] && !data.diagnostic?.purchased && (

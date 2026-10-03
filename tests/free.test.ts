@@ -131,9 +131,9 @@ describe('modo gratuito', () => {
     await adm.req('POST', '/api/admin/login', { password: 'adm' });
     const d = (await adm.req('GET', '/api/admin/analytics')).body;
     expect(d.mode).toBe('free');
-    expect(d.funnel.map((f: any) => f.key)).toEqual(['visits', 'started', 'completed', 'result', 'leads', 'interested']);
-    expect(d.funnel.at(-2).value).toBe(1);
-    expect(d.funnel.at(-1).value).toBe(1);
+    expect(d.funnel.map((f: any) => f.key)).toEqual(['visits', 'started', 'completed', 'result', 'leads', 'interested', 'pix', 'paid']);
+    const step = (k: string) => d.funnel.find((f: any) => f.key === k).value;
+    expect([step('leads'), step('interested'), step('pix'), step('paid')]).toEqual([1, 1, 0, 0]);
     expect(d.revenue).toEqual({ grossCents: 0, netCents: 0, purchases: 0 });
     expect(d.sources[0]).toMatchObject({ leads: 1, interested: 1, paid: 0 });
     expect(d.daily[0]).toMatchObject({ leads: 1, interested: 1, purchases: 0 });
@@ -164,7 +164,7 @@ describe('modo gratuito', () => {
     expect((await c.req('GET', '/api/access/me')).status).toBe(401);
     expect(await c.req('GET', '/api/admin/me?optional=1')).toEqual({ status: 200, body: { ok: false } });
     await c.req('POST', '/api/admin/login', { password: 'adm' });
-    expect((await c.req('GET', '/api/admin/me?optional=1')).body).toEqual({ ok: true });
+    expect((await c.req('GET', '/api/admin/me?optional=1')).body).toEqual({ ok: true, internal: true });
   });
 
   it('diagnóstico: prévia traz só a afinidade do 1º caminho; respostas de interesse ficam no lead', async () => {

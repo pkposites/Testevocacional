@@ -413,3 +413,20 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
 .faq summary { cursor: pointer; font-weight: 700; color: var(--title); }
 .faq details p { margin: 8px 0 0; }
+.th-note { font-size: 0.8rem; color: #d5dce8; line-height: 1.35; }
+
+/* Oferta do roteiro: escolha do caminho e amostra real */
+.diag-pick { margin: 4px 0 12px; }
+.diag-pick .chips { margin-top: 6px; }
+.diag-sample { margin: 6px 0 14px; padding: 14px; border-radius: 14px; background: #fff; border: 1.5px solid #f3c9ad; }
+.diag-sample-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.ds-block { position: relative; padding: 10px 0; border-top: 1px solid var(--line); }
+.ds-block p { margin: 4px 0 0; font-size: 0.93rem; }
+.ds-tag { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent-dark); }
+.ds-steps { margin: 6px 0 0; padding-left: 18px; font-size: 0.93rem; display: grid; gap: 4px; }
+.ds-locked p { filter: blur(0.4px); color: var(--muted); }
+.ds-lock { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 0.78rem; font-weight: 700; color: var(--accent-dark); }
+.diag-sample .diag-weeks { margin-top: 10px; }
+.affinity-help { margin: -4px 0 12px; }
+.affinity-help summary { cursor: pointer; font-size: 0.88rem; font-weight: 700; color: var(--accent-dark); }
+.affinity-help p { margin: 6px 0 0; }
