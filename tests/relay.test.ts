@@ -49,7 +49,7 @@ describe('Worker da Cloudflare (token da Meta)', () => {
     expect((await worker.fetch(signed({ data: [ev()] }), { ...ENV, META_CAPI_TOKEN: '' })).status).toBe(503);
     expect(graph).toHaveLength(0);
     const health = await worker.fetch(new Request(`${RELAY}/health`), ENV);
-    expect(await health.json()).toEqual({ ok: true, meta_configured: true, mp_configured: false });
+    expect(await health.json()).toMatchObject({ ok: true, meta_configured: true, mp_configured: false, relay_secret_fp: expect.stringMatching(/^[0-9a-f]{10}$/) });
   });
 });
 

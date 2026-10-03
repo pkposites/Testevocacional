@@ -26,6 +26,9 @@ export default {
         ok: true,
         meta_configured: Boolean(env.META_CAPI_TOKEN && env.META_PIXEL_ID && env.RELAY_SECRET),
         mp_configured: Boolean(env.MP_ACCESS_TOKEN && env.RELAY_SECRET),
+        // Impressão digital da senha compartilhada (10 primeiros hex do SHA-256): compara com o site sem expor a senha.
+        relay_secret_fp: env.RELAY_SECRET ? await fingerprint(env.RELAY_SECRET) : null,
+        time: Math.floor(Date.now() / 1000),
       });
     }
     if (request.method !== 'POST') return json(405, { error: 'method_not_allowed' });
@@ -118,6 +121,11 @@ async function mpApi(request, env) {
   }
   // Devolve a resposta do Mercado Pago como veio (status + corpo); o token nunca sai daqui.
   return json(200, { status: res.status, body: parsed });
+}
+
+async function fingerprint(secret) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(secret).trim())));
+  return [...h].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10);
 }
 
 async function verifySignature(request, raw, secret) {

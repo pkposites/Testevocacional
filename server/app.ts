@@ -964,6 +964,45 @@ route('GET', '/api/admin/me', async (app, ctx) => {
 });
 
 /** Diagnóstico do banco: correção única, dados ainda quebrados e sessões presas. */
+/** Diagnóstico do Worker: compara a impressão digital da senha compartilhada e faz uma chamada assinada de teste. */
+route('GET', '/api/admin/relay-check', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const url = app.cfg.mp.relayUrl ?? app.cfg.meta.relayUrl;
+  const secret = (app.cfg.mp.relaySecret ?? app.cfg.meta.relaySecret)?.trim();
+  const out: Record<string, unknown> = {
+    relay_url: url ?? null,
+    mp_via_worker: !!(app.cfg.mp.relayUrl && app.cfg.mp.relaySecret),
+    site_secret_fp: secret ? sha256(secret).slice(0, 10) : null,
+    site_time: Math.floor(Date.now() / 1000),
+  };
+  if (url) {
+    try {
+      const h = await app.fetchImpl(`${url}/health`, { signal: AbortSignal.timeout(6000) });
+      out.worker_health = await h.json().catch(() => h.status);
+    } catch (e) {
+      out.worker_health = { error: (e as Error).message };
+    }
+    if (secret) {
+      // GET de uma order inexistente: 200 com status 404 do Mercado Pago = assinatura e token ok.
+      const raw = JSON.stringify({ method: 'GET', path: '/v1/orders/CHECK00000000' });
+      const ts = String(Math.floor(Date.now() / 1000));
+      try {
+        const r = await app.fetchImpl(`${url}/mp/api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-mc-timestamp': ts, 'x-mc-signature': hmacHex('sha256', secret, `${ts}.${raw}`) },
+          body: raw,
+          signal: AbortSignal.timeout(8000),
+        });
+        const b: any = await r.json().catch(() => null);
+        out.signed_call = { worker_status: r.status, error: b?.error ?? null, mp_status: b?.status ?? null, mp_message: b?.body?.message ?? null };
+      } catch (e) {
+        out.signed_call = { error: (e as Error).message };
+      }
+    }
+  }
+  return json(ctx, 200, out);
+});
+
 route('GET', '/api/admin/db-health', async (app, ctx) => {
   requireAdmin(app, ctx);
   const safe = async (sql: string) => {
