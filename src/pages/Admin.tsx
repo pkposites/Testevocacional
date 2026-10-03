@@ -3,10 +3,12 @@ import { formatBrPhone } from '../../shared/phone';
 import { api, ApiFailure, brl } from '../api';
 import { Dashboard } from './Dashboard';
 import { Leads } from './Leads';
+import { AdminPush, useAdminManifest } from '../components/AdminPush';
 
 const dt = (v?: string | null) => (v ? new Date(v).toLocaleString('pt-BR') : '—');
 
 export function Admin() {
+  useAdminManifest();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [pw, setPw] = useState('');
   const [q, setQ] = useState('');
@@ -94,6 +96,7 @@ export function Admin() {
         <button role="tab" aria-selected={tab === 'leads'} onClick={() => setTab('leads')}>Leads</button>
         <button role="tab" aria-selected={tab === 'pedidos'} onClick={() => setTab('pedidos')}>Pedidos</button>
       </div>
+      {tab === 'painel' && <AdminPush />}
       {tab === 'painel' ? <Dashboard /> : tab === 'leads' ? <Leads /> : <>
       {msg && <div className="status info">{msg}</div>}
       {share && (

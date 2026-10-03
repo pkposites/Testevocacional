@@ -402,3 +402,4 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
   .proof { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); transform: translate(-50%, 140%); }
   .proof.show { transform: translate(-50%, 0); }
 }
+.admin-push { margin-bottom: 14px; }

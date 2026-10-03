@@ -5,6 +5,7 @@ import type { MessageSender } from './whatsapp';
 import { hmacHex, newToken, sha256 } from './http';
 import type { PaymentProvider } from './payments/types';
 import { applyProviderState, type ApplyResult } from './reconcile';
+import { notifyAdmins } from './push';
 
 export type App = {
   db: Db;
@@ -129,6 +130,11 @@ export async function afterApply(app: App, r: ApplyResult) {
   if (r.released && r.orderId) {
     await drainOutbox(app, r.orderId);
     await sendMetaPurchase(app, r.orderId);
+    const o = await one(app.db, 'select buyer_name, amount_cents, public_ref from orders where id = $1', [r.orderId]);
+    if (o && o.amount_cents > 0) {
+      const brl = (o.amount_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      await notifyAdmins(app, { title: `💰 Venda: ${brl}`, body: `${String(o.buyer_name).split(' ')[0]} comprou (${o.public_ref}).`, url: '/admin', tag: `sale-${r.orderId}` });
+    }
   }
 }
 

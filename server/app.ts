@@ -9,6 +9,7 @@ import { buildAnalytics, parseRange } from './analytics';
 import { applyProviderState } from './reconcile';
 import { computeResult, type ResultSnapshot } from './scoring';
 import { buildDiagnostic } from './diagnostic';
+import { notifyAdmins, pushEnabled, removePushSubscription, savePushSubscription } from './push';
 import { normalizeBrPhone } from '../shared/phone';
 import { eventIds } from '../shared/events';
 import { accessLink, afterApply, DIAGNOSTIC_PREFIX, drainOutbox, isDiagnosticRef, MAP_ONLY, rateLimit, reconcilePayment, sendMetaEvent, type App } from './services';
@@ -561,6 +562,8 @@ route('POST', '/api/leads', async (app, ctx) => {
   if (created) {
     await sendMetaEvent(app, { key: 'Lead', eventId: eventIds.lead(order!.id), attribution });
     await drainOutbox(app, order!.id);
+    const career = (await one(app.db, `select snapshot->'cards'->0->>'name' as c from results where id = $1`, [resultId]))?.c;
+    await notifyAdmins(app, { title: '🟢 Novo lead', body: `${name.split(' ')[0]}${career ? ` · ${career}` : ''}${attribution.utm_content ? ` · ${String(attribution.utm_content).slice(0, 40)}` : ''}`, url: '/admin', tag: `lead-${order!.id}` });
   }
   return json(ctx, 200, { order_id: order!.id, public_ref: order!.public_ref, result_id: resultId, event_id: eventIds.lead(order!.id) });
 });
@@ -939,6 +942,37 @@ function requireAdmin(app: App, ctx: Ctx) {
   }
 }
 
+// 14 dias: o painel instalado no celular não pede senha a cada abertura.
+const ADMIN_SESSION_SEC = 14 * 86400;
+
+// ---------- notificações do painel (Web Push) ----------
+
+route('GET', '/api/admin/push/key', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  return json(ctx, 200, { enabled: pushEnabled(app), public_key: app.cfg.push.publicKey ?? null });
+});
+
+route('POST', '/api/admin/push/subscribe', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  if (!pushEnabled(app)) throw new ApiError(409, 'push_disabled', 'Notificações não configuradas no servidor.');
+  const body = await readJson(ctx);
+  if (!(await savePushSubscription(app, body.subscription ?? {}))) throw new ApiError(400, 'invalid_subscription', 'Inscrição inválida.');
+  return json(ctx, 200, { ok: true });
+});
+
+route('POST', '/api/admin/push/unsubscribe', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const body = await readJson(ctx);
+  if (typeof body.endpoint === 'string') await removePushSubscription(app, body.endpoint);
+  return json(ctx, 200, { ok: true });
+});
+
+route('POST', '/api/admin/push/test', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const sent = await notifyAdmins(app, { title: '🔔 Notificações ativadas', body: 'Você vai receber um aviso a cada novo lead e a cada venda.', tag: 'test' });
+  return json(ctx, 200, { ok: true, sent });
+});
+
 route('POST', '/api/admin/login', async (app, ctx) => {
   await limit(app, ctx, 'admin-login', 5, 900);
   const body = await readJson(ctx);
@@ -946,8 +980,8 @@ route('POST', '/api/admin/login', async (app, ctx) => {
   if (!app.cfg.admin.password || !safeEqual(sha256(pw), sha256(app.cfg.admin.password.trim()))) throw new ApiError(401, 'invalid_login', 'Senha incorreta.');
   // Login certo zera o contador: só tentativas erradas acumulam para o bloqueio.
   await app.db.query('delete from rate_limits where key = $1', [`admin-login:${clientIp(ctx.req)}`]);
-  const exp = Date.now() + 8 * 3600_000;
-  ctx.setCookies.push(cookie(ADM_COOKIE, adminToken(app, exp), { maxAgeSec: 8 * 3600, secure: secure(app), path: '/api/admin' }));
+  const exp = Date.now() + ADMIN_SESSION_SEC * 1000;
+  ctx.setCookies.push(cookie(ADM_COOKIE, adminToken(app, exp), { maxAgeSec: ADMIN_SESSION_SEC, secure: secure(app), path: '/api/admin' }));
   return json(ctx, 200, { ok: true });
 });
 
