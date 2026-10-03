@@ -929,11 +929,17 @@ route('POST', '/api/events', async (app, ctx) => {
 
 // ---------- admin ----------
 
+const DEV_SECRET = 'dev-secret-not-for-production';
+
 function adminToken(app: App, exp: number) {
   return `${exp}.${hmacHex('sha256', app.cfg.appSecret, `admin:${exp}`)}`;
 }
 
 function requireAdmin(app: App, ctx: Ctx) {
+  // Segredo padrão do código (público no repositório) nunca protege um site no ar.
+  if (app.cfg.appSecret === DEV_SECRET && !/localhost|127\.0\.0\.1/.test(app.cfg.publicBaseUrl)) {
+    throw new ApiError(503, 'app_secret_missing', 'Configure APP_SECRET no Netlify para usar o painel.');
+  }
   const v = ctx.cookies[ADM_COOKIE] ?? '';
   const [expS, sig] = v.split('.');
   const exp = Number(expS);
@@ -1013,6 +1019,9 @@ route('POST', '/api/admin/login', async (app, ctx) => {
   await limit(app, ctx, 'admin-login', 5, 900);
   const body = await readJson(ctx);
   const pw = String(body.password ?? '').trim();
+  if (app.cfg.appSecret === DEV_SECRET && !/localhost|127\.0\.0\.1/.test(app.cfg.publicBaseUrl)) {
+    throw new ApiError(503, 'app_secret_missing', 'Configure APP_SECRET no Netlify para usar o painel.');
+  }
   if (!app.cfg.admin.password || !safeEqual(sha256(pw), sha256(app.cfg.admin.password.trim()))) throw new ApiError(401, 'invalid_login', 'Senha incorreta.');
   // Login certo zera o contador: só tentativas erradas acumulam para o bloqueio.
   await app.db.query('delete from rate_limits where key = $1', [`admin-login:${clientIp(ctx.req)}`]);
