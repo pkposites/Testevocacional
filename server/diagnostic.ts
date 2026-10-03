@@ -17,6 +17,8 @@ export type Diagnostic = {
   why: string[];
   hoursTotal: number;
   minutesPerDay: number;
+  /** Primeiro passo para hoje, antes de pagar qualquer curso. */
+  today: { activity: string; routine: string; requirement: string };
   formation: { path: 'livre' | 'tecnico' | 'regulada'; text: string; courseTerms: string[]; checklist: string[]; redFlags: string[]; warning: string | null };
   experience: { area: string | null; carries: string[]; text: string };
   strengths: string[];
@@ -189,6 +191,11 @@ export function buildDiagnostic(snapshot: ResultSnapshot, answers: Answers, care
     why,
     hoursTotal: Math.round((minutes * 5 * 4) / 60),
     minutesPerDay: minutes,
+    today: {
+      activity: `Faça esta atividade: ${lower(noDot(c.days[4]))}.`,
+      routine: `Conheça a rotina: pesquise “${c.search}” e veja como é um dia de trabalho.`,
+      requirement: `Confira o requisito para começar: ${lower(d.formation.split('. ')[0].replace(/\.$/, ''))}.`,
+    },
     formation: {
       path: d.path,
       text: d.formation,

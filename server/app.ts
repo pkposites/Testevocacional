@@ -325,6 +325,8 @@ route('POST', '/api/results', async (app, ctx) => {
     broad_profile: snap.broadProfile,
     // Para a prévia bloqueada: quanto o 1º caminho combina, sem revelar qual é.
     top_match: snap.cards[0]?.match ?? null,
+    // Modo gratuito: a profissão nº 1 aparece já na prévia (pequena vitória imediata); as outras 4 e o plano pedem o cadastro.
+    top_career: app.cfg.offerMode === 'free' && snap.cards[0] ? { name: snap.cards[0].name, dim: snap.cards[0].dim ?? null } : null,
     event_id: eventIds.gameComplete(s.id, s.answer_revision),
   });
 });

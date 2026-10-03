@@ -11,6 +11,7 @@ type Diagnostic = {
   why: string[];
   hoursTotal: number;
   minutesPerDay: number;
+  today?: { activity: string; routine: string; requirement: string };
   formation: { path: 'livre' | 'tecnico' | 'regulada'; text: string; courseTerms: string[]; checklist: string[]; redFlags: string[]; warning: string | null };
   experience: { area: string | null; carries: string[]; text: string };
   strengths: string[];
@@ -80,6 +81,19 @@ export function DiagnosticPage() {
         <div><strong>4</strong><span>semanas</span></div>
         <div><strong>{d.minutesPerDay} min</strong><span>por dia · ~{d.hoursTotal} h</span></div>
       </div>
+
+      {d.today && (
+        <section className="card dg-today">
+          <span className="diag-badge">Faça hoje</span>
+          <h2 style={{ margin: '8px 0 4px' }}>Antes de se matricular em qualquer curso</h2>
+          <ol className="steps">
+            <li>{d.today.activity}</li>
+            <li>{d.today.routine}</li>
+            <li>{d.today.requirement}</li>
+          </ol>
+          <p className="small muted" style={{ margin: 0 }}>Leva menos de {d.minutesPerDay} minutos e já mostra se vale a pena seguir.</p>
+        </section>
+      )}
 
       {data.cards.length > 1 && (
         <label className="small no-print" style={{ display: 'block', margin: '6px 0 14px' }}>

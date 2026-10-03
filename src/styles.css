@@ -379,3 +379,21 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .next-steps li span:not(.ns-num) { display: block; font-size: 0.9rem; color: #d5dce8; line-height: 1.4; }
 .ns-num { flex: 0 0 28px; height: 28px; border-radius: 99px; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 800; }
 .map-intro { font-size: 1.02rem; margin: 6px 0 14px; }
+
+/* Prévia gratuita: resultado direto */
+.preview-free .pill { margin-bottom: 10px; }
+.top-hit { display: grid; gap: 6px; padding: 18px 16px; border-radius: 16px; background: var(--title); color: #fff; margin: 0 0 12px; }
+.th-label { font-size: 0.9rem; font-weight: 700; color: #ffb48a; }
+.th-name { display: flex; align-items: center; gap: 10px; }
+.th-name strong { font-size: 1.7rem; line-height: 1.15; color: #fff; }
+.th-icon { flex: 0 0 auto; display: inline-flex; width: 44px; height: 44px; border-radius: 12px; align-items: center; justify-content: center; background: rgba(255, 180, 138, 0.18); color: #ffb48a; }
+.th-match { justify-self: start; font-size: 0.85rem; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: rgba(255, 255, 255, 0.12); }
+.pv-lead { font-size: 1.08rem; margin: 0 0 14px; }
+.pv-gets { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.pv-gets li { display: flex; gap: 10px; align-items: flex-start; font-size: 1.05rem; line-height: 1.35; }
+.pv-gets svg { flex: 0 0 auto; color: var(--ok); margin-top: 1px; }
+.pv-next { display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px; border: 1.5px dashed #f3c9ad; background: var(--accent-soft); margin: 4px 0 14px; }
+.pv-next-tag { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent-dark); }
+.pv-next strong { color: var(--title); font-size: 1.02rem; }
+.pv-next span:last-child { font-size: 0.92rem; }
+.diag-promise { font-size: 1.02rem; } .dg-today { border: 2px solid var(--accent); }

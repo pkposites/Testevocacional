@@ -117,10 +117,9 @@ export function DiagnosticOffer(props: {
     <section id="diagnostico" className={`card diag${paid && !purchased ? ' diag-paid' : ''}`} aria-labelledby="diag-title">
       <div className="diag-head">
         <span className="diag-badge"><SparkIcon size={14} /> {purchased ? 'Liberado para você' : paid ? 'Próximo passo' : 'Próximo passo · em preparação'}</span>
-        <h2 id="diag-title">Seu Diagnóstico de {first.name}</h2>
-        <p>
-          {firstName}, o mapa mostra <strong>onde</strong> você tende a ter energia. O diagnóstico mostra <strong>como chegar lá</strong>:
-          um plano feito a partir das suas {QUESTIONS.length} respostas para sair do teste e dar os primeiros passos reais.
+        <h2 id="diag-title">Como começar em {first.name}</h2>
+        <p className="diag-promise">
+          {firstName}, receba um <strong>roteiro prático</strong> para explorar {first.name} e dar os primeiros passos: o que pesquisar, requisitos para entrar, formação necessária e uma atividade da rotina para testar hoje.
         </p>
       </div>
 

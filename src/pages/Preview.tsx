@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { maskBrPhone, normalizeBrPhone } from '../../shared/phone';
 import { CATALOG_SIZE, QUESTIONS } from '../../shared/quiz';
-import { DimIcon, LockIcon } from '../components/Icons';
+import { CheckIcon, DimIcon } from '../components/Icons';
 import { api, brl, getConfig, getMySession, storage, type PublicConfig } from '../api';
 import { getConsent, metaCookies, track } from '../analytics';
 
@@ -14,6 +14,7 @@ export function Preview() {
   const [resultId, setResultId] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [topMatch, setTopMatch] = useState<number | null>(null);
+  const [topCareer, setTopCareer] = useState<{ name: string; dim: string | null } | null>(null);
   const [purchased, setPurchased] = useState<string | null>(null);
   const [openOrder, setOpenOrder] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -34,6 +35,7 @@ export function Preview() {
         if (!s || s.progress < QUESTIONS.length) return nav('/teste', { replace: true });
         const r = await api('POST', '/api/results');
         setTopMatch(typeof r.top_match === 'number' ? r.top_match : null);
+        setTopCareer(r.top_career ?? null);
         setResultId(r.result_id);
         setSummary(r.summary);
         if (s.purchased_result_id === r.result_id) setPurchased(r.result_id);
@@ -95,34 +97,28 @@ export function Preview() {
   const price = brl(cfg?.price_cents ?? 1450);
 
   if (cfg.offer_mode === 'free') {
+    const dims = summary.topDimensions.map((d) => d.label);
+    const paidDiag = cfg.diagnostic_mode === 'paid' && cfg.diagnostic_price_cents;
     return (
-      <div className="wrap">
-        <span className="pill">Sua prévia</span>
-        <h1 style={{ marginTop: 10 }}>
-          {summary.broadProfile ? 'Seu perfil reúne interesses variados' : `Você prefere ${summary.topDimensions[0].label} e ${summary.topDimensions[1].label}`}
-        </h1>
-        <p>{summary.explanation}</p>
-
-        <section className="next-steps" aria-labelledby="next-title">
-          <h2 id="next-title">O que acontece agora</h2>
-          <p className="next-lead">Você vai descobrir <strong>qual profissão mais se encaixa no seu perfil</strong> e <strong>como começar a entrar nela</strong>.</p>
-          <ol>
-            <li>
-              <span className="ns-num">1</span>
-              <div>
-                <strong>Seu Mapa da Carreira · grátis</strong>
-                <span>As 5 profissões que mais combinam com você, o porquê de cada uma (com base nas suas respostas) e um plano de 7 dias para testar.</span>
-              </div>
-            </li>
-            <li>
-              <span className="ns-num">2</span>
-              <div>
-                <strong>Diagnóstico prático da sua profissão nº 1{cfg.diagnostic_mode === 'paid' && cfg.diagnostic_price_cents ? ` · ${brl(cfg.diagnostic_price_cents)}` : ''}</strong>
-                <span>Como começar a ingressar: a formação que a área pede de verdade, um plano de 4 semanas no seu ritmo, a prova prática para mostrar e onde procurar as primeiras vagas.{cfg.diagnostic_mode === 'paid' ? ' Opcional, você decide depois de ver o mapa.' : ''}</span>
-              </div>
-            </li>
-          </ol>
-        </section>
+      <div className="wrap preview-free">
+        <span className="pill">Seu resultado</span>
+        {topCareer ? (
+          <div className="top-hit">
+            <span className="th-label">A profissão que mais combina com você</span>
+            <div className="th-name">
+              {topCareer.dim && <span className="th-icon"><DimIcon dim={topCareer.dim} size={24} /></span>}
+              <strong>{topCareer.name}</strong>
+            </div>
+            {topMatch !== null && <span className="th-match">{topMatch}% de afinidade com as suas respostas</span>}
+          </div>
+        ) : (
+          <h1 style={{ marginTop: 10 }}>Seu resultado está pronto</h1>
+        )}
+        <p className="pv-lead">
+          {summary.broadProfile
+            ? 'Você tem interesses variados, então vale testar mais de um caminho.'
+            : <>Ela apareceu porque você gosta de <strong>{dims[0]}</strong> e <strong>{dims[1]}</strong>.</>}
+        </p>
 
         {purchased ? (
           <div className="card">
@@ -131,35 +127,18 @@ export function Preview() {
           </div>
         ) : (
           <form className="card stack lead-card" onSubmit={submitFree} noValidate>
-            <h2 style={{ marginBottom: 0 }}>Seu mapa completo está pronto, e é grátis</h2>
-            <p className="small muted" style={{ margin: 0 }}>
-              Comparamos suas {QUESTIONS.length} respostas com {CATALOG_SIZE} caminhos. Estes são os 5 que mais combinam com você:
-            </p>
-            <div className="locked-map" aria-label="Prévia bloqueada dos seus 5 caminhos">
-              {[0, 1, 2, 3, 4].map((i) => {
-                const dims = summary.topDimensions.map((d) => d.id);
-                return (
-                  <div key={i} className={`locked-row${i === 0 ? ' first' : ''}`}>
-                    <span className="lr-pos">{i + 1}º</span>
-                    <span className="lr-icon"><DimIcon dim={dims[i % dims.length]} size={17} /></span>
-                    <span className="lr-name" aria-hidden="true" />
-                    {i === 0 && topMatch !== null ? <span className="lr-match">{topMatch}% de afinidade</span> : <LockIcon size={16} className="lr-lock" />}
-                  </div>
-                );
-              })}
-            </div>
-            <ul className="list" style={{ margin: 0 }}>
-              <li>Os 5 caminhos, com a sua % de afinidade em cada um</li>
-              <li>Por que cada um combina com você, citando suas próprias respostas</li>
-              <li>O que pode pesar em cada rotina e um plano de 7 dias para testar</li>
+            <h2 style={{ marginBottom: 0 }}>Libere seu mapa completo, grátis</h2>
+            <ul className="pv-gets">
+              <li><CheckIcon size={20} /><span><strong>Mais 4 profissões</strong> que combinam com você</span></li>
+              <li><CheckIcon size={20} /><span><strong>Por que cada uma apareceu</strong>, em palavras simples</span></li>
+              <li><CheckIcon size={20} /><span><strong>Um primeiro passo para hoje</strong>, antes de pagar qualquer curso</span></li>
             </ul>
-            <p className="small muted" style={{ margin: 0 }}>Informe seu nome e WhatsApp para liberar e guardar o seu mapa.</p>
             <div>
-              <label htmlFor="name">Primeiro nome</label>
+              <label htmlFor="name">Seu primeiro nome</label>
               <input id="name" type="text" autoComplete="given-name" required minLength={2} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <label htmlFor="phone">WhatsApp com DDD</label>
+              <label htmlFor="phone">Seu WhatsApp com DDD</label>
               <input id="phone" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="(11) 98765-4321" required
                 value={phone} onChange={(e) => setPhone(maskBrPhone(e.target.value))} />
               {phone.replace(/\D/g, '').length >= 11 && !normalizeBrPhone(phone) && (
@@ -168,28 +147,29 @@ export function Preview() {
             </div>
             <label className="check">
               <input type="checkbox" checked={contactOk} onChange={(e) => setContactOk(e.target.checked)} required />
-              <span>Quero receber meu resultado e contatos sobre ele pelo WhatsApp.</span>
+              <span>Quero receber meu resultado pelo WhatsApp.</span>
             </label>
             <label className="check">
               <input type="checkbox" checked={publicName} onChange={(e) => setPublicName(e.target.checked)} />
-              <span>Pode mostrar meu primeiro nome e meu 1º caminho nas notificações do site (opcional).</span>
+              <span>Pode mostrar meu primeiro nome nas notificações do site (opcional).</span>
             </label>
             {error && <div className="status error" role="alert">{error}</div>}
             <button className="btn" type="submit" disabled={busy || name.trim().length < 2 || !normalizeBrPhone(phone) || !contactOk}>
               {busy ? <><span className="spinner" /> Liberando…</> : 'Ver meu mapa completo grátis'}
             </button>
             <p className="small muted" style={{ margin: 0 }}>
-              Seus dados não são compartilhados. Veja a <Link to="/privacidade">política de privacidade</Link> e os <Link to="/termos">termos de uso</Link>.
+              Seus dados não são compartilhados. <Link to="/privacidade">Privacidade</Link> · <Link to="/termos">Termos</Link>
             </p>
           </form>
         )}
 
-        <div className="card soft">
-          <h3>Exercício rápido para hoje</h3>
-          <p>Anote uma tarefa que te dá energia e uma que te desgasta.</p>
-          <p className="small muted">Compare com suas preferências acima: elas costumam aparecer nas tarefas que dão energia.</p>
+        <div className="pv-next">
+          <span className="pv-next-tag">Depois, se quiser</span>
+          <strong>Roteiro prático{topCareer ? ` de ${topCareer.name}` : ''}{paidDiag ? ` · ${brl(cfg.diagnostic_price_cents!)}` : ''}</strong>
+          <span>O que pesquisar, requisitos e formação para entrar, e uma atividade da rotina para testar antes de investir.</span>
         </div>
-        <p className="small muted">As sugestões consideram somente os caminhos disponíveis neste catálogo.</p>
+
+        <p className="small muted">Resultado baseado nas suas {QUESTIONS.length} respostas e em {CATALOG_SIZE} caminhos. Mostra o que tende a te dar energia, não garante emprego nem mede talento.</p>
         <p className="small" style={{ marginTop: 16 }}><Link to="/teste">Revisar minhas respostas</Link></p>
       </div>
     );
