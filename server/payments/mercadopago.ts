@@ -101,7 +101,8 @@ export function mpPayer(cfg: AppConfig, input: CreateCheckoutInput) {
     phone: { area_code: local.slice(0, 2), number: local.slice(2) },
   };
   // A API de Orders exige payer.email. Sem modelo definido, usa um endereço técnico por pedido no domínio do site.
-  const template = cfg.mp.payerEmailTemplate || `pix+{ref}@${new URL(cfg.publicBaseUrl).hostname}`;
+  const host = cfg.publicBaseUrl.replace(/^[a-z]+:\/\//i, '').split(/[/:]/)[0] || 'mapadacarreira.com.br';
+  const template = cfg.mp.payerEmailTemplate || `pix+{ref}@${host}`;
   payer.email = template.replace('{ref}', input.publicRef.toLowerCase());
   return payer;
 }
