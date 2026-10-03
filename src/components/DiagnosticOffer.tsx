@@ -1,7 +1,6 @@
 // Oferta do Roteiro para começar: a pessoa escolhe o caminho e vê uma amostra real antes de pagar.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QUESTIONS } from '../../shared/quiz';
 import { api, brl } from '../api';
 import { track } from '../analytics';
 import { CheckIcon, DimIcon, LockIcon, SparkIcon } from './Icons';
@@ -15,23 +14,13 @@ const WANTS = [
   { value: 'vagas', label: 'Como conseguir as primeiras oportunidades' },
   { value: 'mentoria', label: 'Conversar com alguém que já trabalha na área' },
 ];
-const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1).replace(/\.$/, '');
-
-/** Itens do roteiro, montados a partir do que a pessoa respondeu. */
-export function diagnosticItems(c1: Card, c2: Card | undefined, ctx: Ctx): string[] {
-  const items = [`Plano de 4 semanas para testar ${c1.name} de verdade, com o que fazer em cada semana`];
-  if (ctx.currentArea) items.push(`Como usar sua experiência em “${ctx.currentArea}” a seu favor nessa mudança`);
-  else if (ctx.moment === 'first') items.push('Por onde começar sem experiência e sem gastar com o curso errado');
-  else items.push('Quais habilidades que você já tem servem nessa área');
-  items.push(`Plano para o ponto que pode pesar: ${lower(c1.attention)}`);
-  items.push('A formação que a área pede de verdade e como escolher um curso sem cair em promessa');
-  items.push('O primeiro projeto para mostrar no fim do mês e os termos de vaga para procurar');
-  if (ctx.dailyTime) items.push(`Ritmo ajustado aos seus ${ctx.dailyTime} minutos por dia`);
-  if (c2) items.push(`${c1.name} ou ${c2.name}: qual testar primeiro no seu caso`);
-  return items;
-}
-
-const WEEKS = ['Experimentar a rotina', 'Escolher como aprender', 'Construir sua prova', 'Falar com o mercado'];
+/** As 4 etapas do roteiro: o que a pessoa leva, em linguagem direta. */
+const STEPS = [
+  { title: 'Testar a rotina da área', sub: 'antes de gastar com curso' },
+  { title: 'Escolher a formação certa', sub: 'o que a área exige de verdade' },
+  { title: 'Montar seu primeiro projeto', sub: 'algo concreto para mostrar' },
+  { title: 'Buscar as primeiras vagas', sub: 'onde procurar e o que pesquisar' },
+];
 
 /** Barra fixa que convida a descer até o diagnóstico; some quando a oferta aparece na tela. */
 export function ScrollNudge({ career, paid }: { career: string; paid: boolean }) {
@@ -70,7 +59,6 @@ export function DiagnosticOffer(props: {
   const { resultId, cards, context, firstName, interested, onInterested, diagnostic } = props;
   const [chosenId, setChosenId] = useState<string>(props.selectedId && cards.some((c) => c.careerId === props.selectedId) ? props.selectedId : cards[0].careerId);
   const first = cards.find((c) => c.careerId === chosenId) ?? cards[0];
-  const second = cards.find((c) => c.careerId !== first.careerId);
   const [sample, setSample] = useState<Sample | null>(null);
   const nav = useNavigate();
   const paid = diagnostic?.mode === 'paid';
@@ -78,7 +66,6 @@ export function DiagnosticOffer(props: {
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState<{ want?: string }>(props.detail ?? {});
   const [error, setError] = useState<string | null>(null);
-  const items = diagnosticItems(first, second, context);
   useEffect(() => {
     let live = true;
     setSample(null);
@@ -94,7 +81,6 @@ export function DiagnosticOffer(props: {
   }
   const minutes = context.dailyTime ?? 15;
   const tasks = (minutes >= 60 ? 5 : minutes >= 30 ? 4 : 3) * 4;
-  const hours = Math.round((minutes * 20) / 60);
 
   async function want() {
     setBusy(true);
@@ -133,19 +119,31 @@ export function DiagnosticOffer(props: {
     await api('POST', '/api/interest/details', { result_id: resultId, ...patch }).catch((e) => setError((e as Error).message));
   }
 
+  const price = diagnostic ? brl(diagnostic.price_cents) : '';
   return (
     <section id="diagnostico" className={`card diag${paid && !purchased ? ' diag-paid' : ''}`} aria-labelledby="diag-title">
       <div className="diag-head">
-        <span className="diag-badge"><SparkIcon size={14} /> {purchased ? 'Liberado para você' : paid ? 'Próximo passo' : 'Próximo passo · em preparação'}</span>
-        <h2 id="diag-title">Roteiro para começar em {first.name}</h2>
+        <span className="diag-badge"><SparkIcon size={14} /> {purchased ? 'Liberado para você' : 'Roteiro para começar'}</span>
+        <h2 id="diag-title" className="diag-title">
+          {purchased ? <>Seu passo a passo para entrar em {first.name}</> : <>O passo a passo completo para entrar em <span>{first.name}</span></>}
+        </h2>
         <p className="diag-promise">
-          {firstName}, saia do teste com os primeiros passos: o que a área exige para entrar, uma atividade para fazer hoje, o primeiro projeto para mostrar e onde procurar as primeiras vagas.
+          {firstName}, um plano prático de 4 semanas, montado com as suas respostas: o que fazer, em que ordem, até buscar a primeira vaga.
         </p>
       </div>
 
+      <ol className="diag-steps">
+        {STEPS.map((s, i) => (
+          <li key={s.title}>
+            <span className="diag-step-n">{i + 1}</span>
+            <span><strong>{s.title}</strong><em>{s.sub}</em></span>
+          </li>
+        ))}
+      </ol>
+
       {!purchased && cards.length > 1 && (
         <div className="diag-pick">
-          <div className="small" style={{ fontWeight: 700, color: 'var(--title)' }}>Para qual caminho você quer o roteiro?</div>
+          <div className="diag-pick-label">Escolha o caminho do seu plano:</div>
           <div className="chips" role="radiogroup" aria-label="Caminho do roteiro">
             {cards.map((c) => (
               <button key={c.careerId} type="button" role="radio" aria-checked={c.careerId === first.careerId} onClick={() => pick(c.careerId)}>
@@ -153,80 +151,46 @@ export function DiagnosticOffer(props: {
               </button>
             ))}
           </div>
-          <p className="small muted" style={{ margin: '6px 0 0' }}>Depois de liberar, você também pode abrir o roteiro dos outros caminhos do seu mapa.</p>
         </div>
       )}
 
-      <div className="diag-sample" aria-live="polite">
-        <div className="diag-sample-head">
-          {first.dim && <span className="diag-doc-icon"><DimIcon dim={first.dim} size={18} /></span>}
-          <div>
-            <div className="diag-doc-title">{purchased ? 'Seu roteiro' : 'Amostra real do seu roteiro'} · {first.name}</div>
-            <div className="diag-doc-sub">Preparado para {firstName}{first.match !== undefined ? ` · ${first.match}% de afinidade` : ''}</div>
+      {!purchased && (
+        <div className="diag-sample" aria-live="polite">
+          <div className="diag-sample-head">
+            {first.dim && <span className="diag-doc-icon"><DimIcon dim={first.dim} size={18} /></span>}
+            <div className="diag-doc-title">Veja grátis o passo 1 · {first.name}</div>
           </div>
+          {!sample ? <div className="spinner dark" aria-label="Carregando amostra" /> : (
+            <>
+              <p className="ds-today"><strong>Faça hoje:</strong> {sample.today.activity.replace(/^Faça esta atividade:\s*/, "")}</p>
+              <span className="pill dg-path">{PATH_LABEL[sample.path]}</span>
+              <div className="ds-lock"><LockIcon size={14} /> Passos 2, 3 e 4 no plano completo</div>
+            </>
+          )}
         </div>
-        {!sample ? <div className="spinner dark" aria-label="Carregando amostra" /> : (
-          <>
-            <div className="ds-block">
-              <span className="ds-tag">Faça hoje</span>
-              <ol className="ds-steps">
-                <li>{sample.today.activity}</li>
-                <li>{sample.today.routine}</li>
-              </ol>
-            </div>
-            <div className="ds-block">
-              <span className="ds-tag">Requisito para entrar · {PATH_LABEL[sample.path]}</span>
-              <p>{sample.requirement}</p>
-            </div>
-            <div className={`ds-block${purchased ? '' : ' ds-locked'}`}>
-              <span className="ds-tag">Seu primeiro projeto</span>
-              <p>{sample.proof_teaser}</p>
-              {!purchased && <span className="ds-lock"><LockIcon size={14} /> continua no roteiro</span>}
-            </div>
-            <div className="diag-weeks">{WEEKS.map((w, i) => <span key={w} className={i === 0 ? 'open' : ''}><b>Semana {i + 1}</b>{i === 0 ? w : ''}</span>)}</div>
-          </>
-        )}
-      </div>
-
-      <div className="small" style={{ fontWeight: 700, color: 'var(--title)', marginTop: 4 }}>O que vem no roteiro completo</div>
-      <ul className="diag-items">
-        {items.map((it) => (
-          <li key={it}>{purchased ? <CheckIcon size={16} className="diag-li-icon" /> : <LockIcon size={16} className="diag-li-icon" />}<span>{it}</span></li>
-        ))}
-      </ul>
+      )}
 
       {purchased ? (
-        <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir meu roteiro</button>
+        <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir meu passo a passo</button>
       ) : paid ? (
         <div className="diag-buy">
-          <div className="diag-stats">
-            <div><strong>4</strong><span>semanas de plano</span></div>
-            <div><strong>{sample?.tasks ?? tasks}</strong><span>tarefas guiadas</span></div>
-            <div><strong>{hours} h</strong><span>no seu ritmo</span></div>
-          </div>
           <div className="diag-price">
-            <div className="diag-price-main">
-              <span className="diag-price-label">Roteiro para começar em {first.name}</span>
-              <strong>{brl(diagnostic!.price_cents)}</strong>
-              <span className="diag-price-day">menos de {brl(Math.ceil(diagnostic!.price_cents / 28))} por dia do plano</span>
-            </div>
-            <ul className="diag-guarantees">
-              <li><CheckIcon size={15} /> Pagamento único por Pix, sem assinatura</li>
-              <li><CheckIcon size={15} /> Liberado aqui assim que o banco confirmar</li>
-              <li><CheckIcon size={15} /> Fica salvo: abra quando quiser com seu WhatsApp</li>
-            </ul>
+            <strong>{price}</strong>
+            <span>Pagamento único no Pix · liberado na hora</span>
           </div>
           <button className="btn diag-cta" onClick={buy} disabled={busy}>
-            {busy ? 'Gerando Pix…' : <>Liberar meu roteiro por {brl(diagnostic!.price_cents)}</>}
+            {busy ? 'Gerando Pix…' : <>Quero meu passo a passo completo</>}
           </button>
-          <p className="small muted" style={{ margin: '8px 0 0', textAlign: 'center' }}>Feito com as suas {QUESTIONS.length} respostas, não é um material genérico.</p>
+          <p className="diag-foot">
+            <CheckIcon size={15} /> {sample?.tasks ?? tasks} tarefas guiadas · {minutes} min por dia · fica salvo no seu WhatsApp
+          </p>
         </div>
       ) : !interested ? (
         <>
           <button className="btn" onClick={want} disabled={busy}>
-            {busy ? 'Registrando…' : `Quero o roteiro para começar em ${first.name}`}
+            {busy ? 'Registrando…' : `Quero o passo a passo para ${first.name}`}
           </button>
-          <p className="small muted" style={{ margin: '8px 0 0' }}>Sem compromisso e sem pagamento agora. Quem pedir primeiro recebe primeiro, pelo WhatsApp.</p>
+          <p className="small muted" style={{ margin: '8px 0 0' }}>Sem compromisso e sem pagamento agora. Avisamos pelo WhatsApp.</p>
         </>
       ) : (
         <div className="diag-after">

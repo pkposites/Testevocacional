@@ -430,3 +430,25 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .affinity-help { margin: -4px 0 12px; }
 .affinity-help summary { cursor: pointer; font-size: 0.88rem; font-weight: 700; color: var(--accent-dark); }
 .affinity-help p { margin: 6px 0 0; }
+
+/* Oferta do roteiro: headline forte, 4 etapas grandes, pouco texto pequeno. */
+.diag-title { font-size: 1.55rem; line-height: 1.15; letter-spacing: -0.01em; margin: 10px 0 8px; }
+.diag-title span { color: var(--accent-dark); }
+.diag-promise { font-size: 1.05rem; margin: 0 0 14px; color: var(--title); }
+.diag-steps { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 8px; }
+.diag-steps li { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: #fff; border: 1px solid #f3c9ad; }
+.diag-steps strong { display: block; font-size: 1.02rem; color: var(--title); line-height: 1.25; }
+.diag-steps em { font-style: normal; font-size: 0.88rem; color: var(--muted); }
+.diag-step-n { flex: 0 0 32px; height: 32px; border-radius: 99px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-weight: 800; }
+.diag-pick-label { font-weight: 700; color: var(--title); }
+.ds-today { margin: 4px 0 10px; font-size: 0.98rem; }
+.diag-sample .ds-lock { display: flex; margin-top: 10px; }
+.diag-price { display: grid; justify-items: center; gap: 2px; text-align: center; border: 0; padding: 4px 0 12px; margin: 0; background: none; }
+.diag-price strong { font-size: 2.3rem; color: var(--title); letter-spacing: -0.02em; line-height: 1.1; }
+.diag-price span { font-size: 0.95rem; font-weight: 600; color: var(--ok); }
+.diag-cta { width: 100%; font-size: 1.12rem; padding: 16px; }
+.diag-foot { display: flex; gap: 6px; align-items: center; justify-content: center; margin: 10px 0 0; font-size: 0.86rem; color: var(--muted); text-align: center; }
+.diag-foot svg { color: var(--ok); flex: 0 0 auto; }
+.diag-pick .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.diag-pick .chips::-webkit-scrollbar { display: none; }
+.diag-pick .chips button { flex: 0 0 auto; white-space: nowrap; }

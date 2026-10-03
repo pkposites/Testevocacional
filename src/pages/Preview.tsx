@@ -171,7 +171,7 @@ export function Preview() {
         <div className="pv-next">
           <span className="pv-next-tag">Depois, se quiser</span>
           <strong>Roteiro para começar{topCareer ? ` em ${topCareer.name}` : ''}{paidDiag ? ` · ${brl(cfg.diagnostic_price_cents!)}` : ''}</strong>
-          <span>O que pesquisar, requisitos e formação para entrar, e uma atividade da rotina para testar antes de investir.</span>
+          <span>O passo a passo completo para entrar na área: testar a rotina, escolher a formação, montar o primeiro projeto e buscar as primeiras vagas.</span>
         </div>
 
         <p className="small muted">Resultado baseado nas suas {QUESTIONS.length} respostas e em {CATALOG_SIZE} caminhos. Mostra o que tende a te dar energia, não garante emprego nem mede talento.</p>
