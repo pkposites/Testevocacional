@@ -78,7 +78,7 @@ export function AdminPush() {
     <div className="card soft admin-push">
       <strong>🔔 Aviso a cada novo lead e venda</strong>
       {state === 'off-server' ? (
-        <p className="small muted" style={{ margin: '6px 0 0' }}>As notificações ainda não estão configuradas no servidor.</p>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>As notificações ainda não estão configuradas no servidor (faltam as chaves VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Netlify, com um novo deploy).</p>
       ) : isIos() && !isStandalone() ? (
         <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
           <li>Toque em <strong>Compartilhar</strong> (quadrado com seta) e depois em <strong>Adicionar à Tela de Início</strong>.</li>
