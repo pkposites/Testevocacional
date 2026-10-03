@@ -942,6 +942,42 @@ function requireAdmin(app: App, ctx: Ctx) {
   }
 }
 
+/**
+ * Resumo do funil para a rotina de acompanhamento (a cada 3 h). Aceita o login do admin ou a chave REPORT_TOKEN
+ * no cabeçalho x-report-token. Só números agregados: nenhum nome ou telefone.
+ */
+route('GET', '/api/admin/report', async (app, ctx) => {
+  const tok = ctx.req.headers.get('x-report-token') ?? '';
+  const viaToken = !!app.cfg.reportToken && tok.length > 0 && safeEqual(sha256(tok), sha256(app.cfg.reportToken));
+  if (!viaToken) requireAdmin(app, ctx);
+  const hours = Math.min(Math.max(Number(ctx.url.searchParams.get('hours') ?? 3) || 3, 1), 24 * 30);
+  const win = async (h: number) => {
+    const since = `now() - interval '${h} hours'`;
+    const r = await one(app.db, `select
+        (select count(*) from quiz_sessions where created_at > ${since})::int as testes_iniciados,
+        (select count(*) from results where created_at > ${since})::int as testes_concluidos,
+        (select count(*) from orders where provider = 'free' and public_ref not like 'DG-%' and created_at > ${since})::int as leads,
+        (select count(*) from orders where public_ref not like 'DG-%' and diagnostic_interest_at > ${since})::int as cliques_oferta,
+        (select count(*) from orders where public_ref like 'DG-%' and created_at > ${since})::int as pix_gerados,
+        (select count(*) from orders where public_ref like 'DG-%' and status = 'paid' and paid_at > ${since})::int as vendas,
+        (select coalesce(sum(amount_cents), 0) from orders where public_ref like 'DG-%' and status = 'paid' and paid_at > ${since})::int as receita_centavos`);
+    return r;
+  };
+  const byAd = await app.db.query(`select coalesce(o.attribution->>'utm_content', '(direto)') as anuncio,
+      count(*) filter (where o.provider = 'free')::int as leads,
+      count(*) filter (where o.public_ref like 'DG-%' and o.status = 'paid')::int as vendas
+    from orders o where o.created_at > now() - interval '${hours} hours' group by 1 order by 2 desc limit 15`);
+  return json(ctx, 200, {
+    gerado_em: new Date().toISOString(),
+    preco_centavos: app.cfg.diagnosticPriceCents,
+    janela_horas: hours,
+    janela: await win(hours),
+    ultimas_24h: await win(24),
+    ultimos_7d: await win(24 * 7),
+    por_anuncio: byAd,
+  });
+});
+
 // 14 dias: o painel instalado no celular não pede senha a cada abertura.
 const ADMIN_SESSION_SEC = 14 * 86400;
 

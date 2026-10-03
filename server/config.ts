@@ -42,6 +42,8 @@ export type AppConfig = {
   seller: { name: string; document: string; address: string };
   meta: { pixelId?: string; capiToken?: string; testEventCode?: string; relayUrl?: string; relaySecret?: string };
   admin: { password?: string };
+  /** Chave só-leitura do resumo do funil (rotina de acompanhamento). */
+  reportToken?: string;
   /** Web Push do painel admin (chaves VAPID). */
   push: { publicKey?: string; privateKey?: string; subject: string };
   purchaseLinkTtlHours: number;
@@ -116,6 +118,7 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
       relaySecret: e.META_RELAY_SECRET,
     },
     admin: { password: e.ADMIN_PASSWORD },
+    reportToken: e.REPORT_TOKEN?.trim() && e.REPORT_TOKEN.trim().length >= 24 ? e.REPORT_TOKEN.trim() : undefined,
     push: {
       publicKey: e.VAPID_PUBLIC_KEY?.trim() || undefined,
       privateKey: e.VAPID_PRIVATE_KEY?.trim() || undefined,

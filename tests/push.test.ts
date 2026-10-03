@@ -58,3 +58,21 @@ describe('notificações do painel', () => {
     expect((await c.req('POST', '/api/leads', { result_id: r.body.result_id, buyer_name: 'Ana', buyer_phone: '11987654321', contact_consent: true })).status).toBe(200);
   });
 });
+
+describe('resumo para a rotina', () => {
+  it('exige login ou chave; devolve só números', async () => {
+    const app = await makeApp({ OFFER_MODE: 'free', REPORT_TOKEN: 'r'.repeat(32) });
+    const c = new Client(app);
+    await c.req('POST', '/api/quiz/sessions', { attribution: { utm_content: 'AD12' } });
+    await c.req('PUT', '/api/quiz/sessions/me', { answers: analyticAnswers(), context: { moment: 'first', dailyTime: 15 } });
+    const r = await c.req('POST', '/api/results', {});
+    await c.req('POST', '/api/leads', { result_id: r.body.result_id, buyer_name: 'Duda', buyer_phone: '11987654321', contact_consent: true });
+    expect((await new Client(app).req('GET', '/api/admin/report')).status).toBe(401);
+    expect((await new Client(app).req('GET', '/api/admin/report', undefined, { 'x-report-token': 'errado' })).status).toBe(401);
+    const ok = await new Client(app).req('GET', '/api/admin/report?hours=3', undefined, { 'x-report-token': 'r'.repeat(32) });
+    expect(ok.status).toBe(200);
+    expect(ok.body.janela).toMatchObject({ testes_iniciados: 1, testes_concluidos: 1, leads: 1, vendas: 0 });
+    expect(ok.body.por_anuncio).toEqual([{ anuncio: 'AD12', leads: 1, vendas: 0 }]);
+    expect(JSON.stringify(ok.body)).not.toMatch(/Duda|98765/);
+  });
+});
