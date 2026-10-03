@@ -100,7 +100,9 @@ export function mpPayer(cfg: AppConfig, input: CreateCheckoutInput) {
     first_name: input.buyerName,
     phone: { area_code: local.slice(0, 2), number: local.slice(2) },
   };
-  if (cfg.mp.payerEmailTemplate) payer.email = cfg.mp.payerEmailTemplate.replace('{ref}', input.publicRef.toLowerCase());
+  // A API de Orders exige payer.email. Sem modelo definido, usa um endereço técnico por pedido no domínio do site.
+  const template = cfg.mp.payerEmailTemplate || `pix+{ref}@${new URL(cfg.publicBaseUrl).hostname}`;
+  payer.email = template.replace('{ref}', input.publicRef.toLowerCase());
   return payer;
 }
 
