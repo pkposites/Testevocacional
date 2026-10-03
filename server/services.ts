@@ -101,7 +101,7 @@ export async function sendMetaEvent(
       const ts = String(Math.floor(Date.now() / 1000));
       const res = await app.fetchImpl(`${relayUrl}/meta/events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-mc-timestamp': ts, 'x-mc-signature': hmacHex('sha256', relaySecret!, `${ts}.${raw}`) },
+        headers: { 'Content-Type': 'application/json', 'x-mc-timestamp': ts, 'x-mc-signature': hmacHex('sha256', relaySecret!.trim(), `${ts}.${raw}`) },
         body: raw,
         signal: AbortSignal.timeout(5000),
       });
