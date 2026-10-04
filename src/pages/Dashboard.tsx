@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, brl, storage } from '../api';
+import { api, brl, getConfig, storage } from '../api';
 
 // Painel de análise do funil. Cores por função (ver dataviz): série única em azul; 3 séries diárias nas
 // cores categóricas 1–3 em ordem fixa; status sempre com ícone + texto.
@@ -29,9 +29,7 @@ type Data = {
   consent: { key: string; c: number }[];
 };
 
-const PRICE = 1450;
 const ROAS_GOAL = 1.8;
-const CPA_GOAL = PRICE / 100 / ROAS_GOAL;
 const MOMENT: Record<string, string> = { first: 'Primeira área', change: 'Mudar de área', explore: 'Explorar sem sair' };
 const DECISION: Record<string, string> = { explore_more: 'Quero explorar mais', know_better: 'Preciso conhecer melhor', try_other: 'Prefiro testar outra opção' };
 const SERIES = [
@@ -286,6 +284,10 @@ export function Dashboard() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
+  // Meta de custo por compra = preço do produto vendido ÷ ROAS alvo (preço lido do servidor).
+  const [priceCents, setPriceCents] = useState(1790);
+  useEffect(() => void getConfig().then((c) => setPriceCents(c.offer_mode === 'free' ? (c.diagnostic_price_cents ?? 1790) : c.price_cents)).catch(() => undefined), []);
+  const CPA_GOAL = priceCents / 100 / ROAS_GOAL;
 
   useEffect(() => {
     const p = PRESETS.find((x) => x.id === preset);
@@ -320,7 +322,7 @@ export function Dashboard() {
     const cpa = spend > 0 && data.revenue.purchases > 0 ? spend / data.revenue.purchases : null;
     const cpv = spend > 0 && f.visits > 0 ? spend / f.visits : null;
     return { f, revenue, roas, cpa, cpv, neededConv: cpv != null ? cpv / CPA_GOAL : null, conv: pct(f.paid, f.visits) };
-  }, [data, spend]);
+  }, [data, spend, CPA_GOAL]);
 
   const insights = useMemo(() => {
     if (!data || !k) return [];
