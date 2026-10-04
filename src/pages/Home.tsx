@@ -41,24 +41,27 @@ export function Home() {
       ) : (
         <button className="btn" onClick={() => nav('/teste')}>{free ? 'Começar meu teste grátis' : 'Começar meu teste'}</button>
       )}
-      <p className="small muted" style={{ marginTop: 12 }}>
-        Uma ferramenta de exploração baseada nas suas respostas. Não é avaliação psicológica nem garantia de carreira.
-      </p>
+      <ul className="home-quick">
+        <li><b>{QUIZ_MINUTES} min</b> para responder</li>
+        <li><b>Grátis</b>, sem cartão</li>
+        <li><b>Resultado</b> na hora</li>
+      </ul>
 
       <div className="card soft" style={{ marginTop: 24 }}>
-        <h3>O que você recebe</h3>
+        <span className="kicker">O que você recebe</span>
+        <h2 className="sec-title">Seu mapa em 3 partes</h2>
         <ol className="journey">
           <li>
             <span className="j-icon"><DimIcon dim="A" size={20} /></span>
-            <div><strong>Seu perfil de interesses</strong><span>{QUESTIONS.length} frases rápidas, cerca de {QUIZ_MINUTES} minutos. Você vê quais tipos de tarefa te dão mais energia.</span></div>
+            <div><strong>Seu perfil de interesses</strong><span>Quais tarefas te dão mais energia.</span></div>
           </li>
           <li>
             <span className="j-icon"><DimIcon dim="O" size={20} /></span>
-            <div><strong>Os 5 caminhos que mais combinam com você</strong><span>Entre {CATALOG_SIZE} caminhos, com a sua % de afinidade e o motivo, citando suas próprias respostas.</span></div>
+            <div><strong>Os 5 caminhos que mais combinam com você</strong><span>Entre {CATALOG_SIZE} profissões, com o motivo de cada uma.</span></div>
           </li>
           <li>
             <span className="j-icon"><DimIcon dim="P" size={20} /></span>
-            <div><strong>Um plano de 7 dias para testar na prática</strong><span>Uma tarefa curta por dia para sentir a rotina antes de decidir qualquer coisa.</span></div>
+            <div><strong>Um plano de 7 dias para testar na prática</strong><span>Uma tarefa curta por dia, antes de decidir.</span></div>
           </li>
         </ol>
         <div className="sample" aria-label="Exemplo de mapa">
@@ -78,7 +81,7 @@ export function Home() {
             <div className="sc-why">Você marcou “Bastante a ver” em “Gosto de cuidar do visual ou do jeito de apresentar algo…”</div>
           </div>
         </div>
-        <p className="small muted" style={{ marginTop: 12 }}>{free ? 'Grátis, sem pagamento e sem cartão.' : 'Não pedimos seus contatos para mostrar a prévia.'}</p>
+
       </div>
       <section className="faq" aria-labelledby="faq-title">
         <h2 id="faq-title">Perguntas frequentes</h2>
@@ -89,6 +92,7 @@ export function Home() {
           </details>
         ))}
       </section>
+      <p className="small muted">Ferramenta de exploração baseada nas suas respostas. Não é avaliação psicológica.</p>
       <p className="small"><Link to="/meus-mapas">{free ? "Já fiz o teste e quero abrir meu mapa" : "Já comprei e quero acessar meu mapa"}</Link></p>
     </div>
   );

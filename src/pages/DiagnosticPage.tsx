@@ -82,6 +82,9 @@ export function DiagnosticPage() {
         <div><strong>{d.minutesPerDay} min</strong><span>por dia · ~{d.hoursTotal} h</span></div>
       </div>
 
+      <button className="btn no-print" style={{ marginBottom: 16 }} onClick={() => window.print()}>Baixar em PDF</button>
+      <p className="small muted no-print" style={{ marginTop: -8 }}>No celular: toque em Baixar em PDF e escolha "Salvar como PDF" ou "Salvar em Arquivos".</p>
+
       {d.today && (
         <section className="card dg-today">
           <span className="diag-badge">Faça hoje</span>
@@ -195,7 +198,7 @@ export function DiagnosticPage() {
 
       <p className="small muted">{d.closing}</p>
       <div className="no-print" style={{ display: 'grid', gap: 8 }}>
-        <button className="btn secondary" onClick={() => window.print()}>Salvar em PDF / imprimir</button>
+        <button className="btn secondary" onClick={() => window.print()}>Baixar em PDF</button>
         <Link className="btn link" to={`/mapa/${data.result_id}`}>Voltar ao meu mapa</Link>
       </div>
     </div>

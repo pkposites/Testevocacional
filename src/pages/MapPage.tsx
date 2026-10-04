@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CATALOG_SIZE, MOMENTS } from '../../shared/quiz';
+import { CATALOG_SIZE } from '../../shared/quiz';
 import { api, ApiFailure } from '../api';
 import { track } from '../analytics';
-import { DiagnosticOffer, ScrollNudge } from '../components/DiagnosticOffer';
+import { DiagnosticOffer, ScrollNudge, SwipeRow } from '../components/DiagnosticOffer';
 import { DimIcon } from '../components/Icons';
 
 type Card = {
@@ -48,14 +48,6 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       setTimeout(() => setDone(false), 2000);
     }}>{done ? 'Copiado ✓' : label}</button>
   );
-}
-
-/** Dimensões em destaque; com empate na segunda posição, todas as empatadas entram. */
-function topLabels(map: MapData['map']): string {
-  const labels = map.profile
-    ? map.profile.filter((b) => b.score >= map.profile![1].score).map((b) => b.label)
-    : map.summary.topDimensions.map((d) => d.label);
-  return labels.length <= 2 ? labels.join(' e ') : `${labels.slice(0, -1).join(', ')} e ${labels[labels.length - 1]}`;
 }
 
 export function MapPage() {
@@ -138,19 +130,30 @@ export function MapPage() {
   if (!data) return <div className="wrap"><div className="spinner dark" aria-label="Carregando" /></div>;
 
   const { map } = data;
-  const moment = MOMENTS.find((m) => m.value === map.context.moment)?.label;
+  // Numeração das seções: sem a oferta (perfil amplo), as seguintes sobem um número.
+  const n0 = !map.broadProfile && map.cards[0] ? 0 : -1;
   const doneCount = plan ? plan.days.filter((_, i) => checks[`${plan.careerId}:${i + 1}`]).length : 0;
 
   return (
     <div className="wrap">
-      <span className="pill">{data.offer_mode === 'free' ? 'Código' : 'Pedido'} {data.public_ref}</span>
-      <h1 style={{ marginTop: 10 }}>{data.buyer_first_name}, este é o seu Mapa da Carreira</h1>
-      {!map.broadProfile && map.cards[0] && (
-        <p className="map-intro">
-          A profissão que mais se encaixa no seu perfil é <strong>{map.cards[0].name}</strong>.
-          {data.diagnostic?.purchased ? ' Abra o seu Roteiro para começar logo abaixo.' : ' Logo abaixo, o passo a passo para começar nela; mais embaixo, por que ela combina com você.'}
-        </p>
+      <span className="kicker">1 · Seu resultado</span>
+      {!map.broadProfile && map.cards[0] ? (
+        <div className="map-hero">
+          <h1>{data.buyer_first_name}, seu 1º caminho é <span>{map.cards[0].name}</span></h1>
+          <div className="map-hero-tags">
+            {map.cards[0].match !== undefined && <span className="match big">{map.cards[0].match}% de afinidade</span>}
+            {(map.profile ? map.profile.filter((b) => b.score >= map.profile![1].score) : map.summary.topDimensions).slice(0, 3).map((d) => (
+              <span key={d.id} className="map-tag"><DimIcon dim={d.id} size={14} /> gosta de {d.label}</span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="map-hero">
+          <h1>{data.buyer_first_name}, seus interesses são variados</h1>
+          <p>Por isso o mapa traz 5 caminhos para explorar, sem apontar uma profissão ideal.</p>
+        </div>
       )}
+
       {!map.broadProfile && map.cards[0] && (
         <DiagnosticOffer
           resultId={data.result_id} cards={map.cards} selectedId={selected}
@@ -160,87 +163,92 @@ export function MapPage() {
           onInterested={() => setInterest(true)}
         />
       )}
-      <div className="card soft">
-        {moment && <p><strong>Seu momento:</strong> {moment}</p>}
-        {map.context.currentArea && <p><strong>Área atual:</strong> {map.context.currentArea}</p>}
-        <p style={{ marginBottom: 0 }}>
-          {map.broadProfile
-            ? 'Seu perfil reúne interesses variados. Os caminhos abaixo são experiências exploratórias, não uma profissão ideal.'
-            : <>Suas preferências mais altas: <strong>{topLabels(map)}</strong>.</>}
-        </p>
-      </div>
-      <p className="small muted">Ordem baseada nas suas respostas e no catálogo de {CATALOG_SIZE} caminhos. Preferência por uma atividade não comprova habilidade.</p>
 
       {map.cards.map((c, idx) => (
         <Fragment key={c.careerId}>
-        {idx === 0 && <h2 style={{ marginTop: 20 }}>Seu 1º caminho</h2>}
         {idx === 0 && (
-          <details className="affinity-help">
-            <summary>O que significa a % de afinidade?</summary>
-            <p className="small">
-              Mostra o quanto suas respostas combinam com o que cada caminho exige no dia a dia (0 a 100), comparando com os {CATALOG_SIZE} caminhos do catálogo.
-              Quanto maior, mais as tarefas desse caminho tendem a te dar energia. <strong>Não mede talento nem chance de sucesso</strong>: diferenças de poucos pontos entre dois caminhos são um empate, então vale testar os dois.
-            </p>
-          </details>
+          <>
+            <span className="kicker" style={{ marginTop: 28 }}>{3 + n0} · Por que combina com você</span>
+            <h2 className="sec-title">{c.name}</h2>
+          </>
         )}
-        {idx === 1 && <h2 style={{ marginTop: 24 }}>Seus outros {map.cards.length - 1} caminhos</h2>}
-        <article className="card career">
-          <div className="pos">{c.position}º caminho</div>
-          <div className="career-head">
-            <h3>{c.dim && <span className="career-icon"><DimIcon dim={c.dim} size={18} /></span>}{c.name}</h3>
-            {c.match !== undefined && <span className="match" title="Afinidade com as suas respostas">{c.match}% de afinidade</span>}
-          </div>
-          {c.evidence && c.evidence.length > 0 ? (
-            <>
-              <div className="small" style={{ fontWeight: 700, color: 'var(--title)' }}>Por que combina com você</div>
-              <ul className="evidence">
-                {c.evidence.map((e) => <li key={e}>{e}.</li>)}
-              </ul>
-            </>
-          ) : (
-            <>
-              <p>{c.reasons[0]}</p>
-              <p>{c.reasons[1]}</p>
-            </>
-          )}
-          {c.tension && <div className="status warn small" style={{ marginTop: 8, fontWeight: 500 }}><strong>Onde pode pesar:</strong> {c.tension}</div>}
-          <dl>
-            <dt>Rotina</dt><dd>{c.routine}</dd>
-            <dt>Ponto de atenção</dt><dd>{c.attention}</dd>
-            <dt>Primeiro passo</dt><dd>{c.firstStep}</dd>
-          </dl>
-          <details style={{ marginTop: 8 }}>
-            <summary>Ver mais sobre este caminho</summary>
-            <dl>
-              <dt>Habilidade inicial</dt><dd>{c.skill}</dd>
-              <dt>Miniatividade prática</dt><dd>{c.miniActivity}</dd>
-              <dt>Como começar no seu momento</dt><dd>{c.entry}</dd>
-              <dt>Para pesquisar</dt><dd>Busque por: <em>“{c.search}”</em></dd>
-              <dt>Conversa com um profissional</dt>
-              <dd>
-                <p className="small" style={{ margin: '4px 0' }}>“{map.common.professionalMessage}”</p>
-                <CopyButton text={map.common.professionalMessage} label="Copiar mensagem" />
-                <p className="small muted" style={{ marginTop: 6 }}>{map.common.noProfessionalFallback}</p>
-              </dd>
-            </dl>
-          </details>
-          <button className={selected === c.careerId ? 'btn secondary' : 'btn'} style={{ marginTop: 12 }} onClick={() => choose(c.careerId)}>
-            {selected === c.careerId ? 'Caminho escolhido ✓' : 'Quero experimentar este caminho'}
-          </button>
-        </article>
+        {idx === 1 && (
+          <>
+            <span className="kicker" style={{ marginTop: 28 }}>{4 + n0} · Seus outros {map.cards.length - 1} caminhos</span>
+            <h2 className="sec-title">Também combinam com você</h2>
+          </>
+        )}
+        {idx === 0 ? (
+          <article className="card career">
+            <div className="career-head">
+              <h3>{c.dim && <span className="career-icon"><DimIcon dim={c.dim} size={18} /></span>}{c.name}</h3>
+              {c.match !== undefined && <span className="match">{c.match}% de afinidade</span>}
+            </div>
+            {c.evidence && c.evidence.length > 0 ? (
+              <ul className="evidence">{c.evidence.map((e) => <li key={e}>{e}.</li>)}</ul>
+            ) : (
+              <ul className="evidence">{c.reasons.slice(0, 2).map((r) => <li key={r}>{r}</li>)}</ul>
+            )}
+            <div className="facts">
+              <div><b>Como é a rotina</b><span>{c.routine}</span></div>
+              <div><b>Primeiro passo</b><span>{c.firstStep}</span></div>
+              {c.tension && <div className="warn"><b>Onde pode pesar</b><span>{c.tension}</span></div>}
+            </div>
+            <details style={{ marginTop: 10 }}>
+              <summary>Ver mais detalhes</summary>
+              <dl>
+                <dt>Ponto de atenção</dt><dd>{c.attention}</dd>
+                <dt>Habilidade inicial</dt><dd>{c.skill}</dd>
+                <dt>Miniatividade prática</dt><dd>{c.miniActivity}</dd>
+                <dt>Como começar no seu momento</dt><dd>{c.entry}</dd>
+                <dt>Para pesquisar</dt><dd>Busque por: <em>“{c.search}”</em></dd>
+                <dt>Conversa com um profissional</dt>
+                <dd>
+                  <p style={{ margin: '4px 0' }}>“{map.common.professionalMessage}”</p>
+                  <CopyButton text={map.common.professionalMessage} label="Copiar mensagem" />
+                </dd>
+                <dt>O que é a % de afinidade?</dt>
+                <dd>O quanto suas respostas combinam com a rotina de cada caminho, entre {CATALOG_SIZE}. Não mede talento: poucos pontos de diferença é empate.</dd>
+              </dl>
+            </details>
+            <button className={selected === c.careerId ? 'btn secondary' : 'btn'} style={{ marginTop: 12 }} onClick={() => choose(c.careerId)}>
+              {selected === c.careerId ? 'Caminho escolhido ✓' : 'Testar este caminho por 7 dias'}
+            </button>
+          </article>
+        ) : (
+          <article className="card career compact">
+            <div className="career-head">
+              <h3><span className="pos-n">{c.position}º</span>{c.dim && <span className="career-icon"><DimIcon dim={c.dim} size={16} /></span>}{c.name}</h3>
+              {c.match !== undefined && <span className="match">{c.match}%</span>}
+            </div>
+            <p className="career-why">{(c.evidence && c.evidence[0]) ?? c.reasons[0]}</p>
+            <details>
+              <summary>Ver detalhes</summary>
+              {c.evidence && c.evidence.length > 1 && <ul className="evidence">{c.evidence.slice(1).map((e) => <li key={e}>{e}.</li>)}</ul>}
+              {c.tension && <div className="status warn small" style={{ fontWeight: 500 }}><strong>Onde pode pesar:</strong> {c.tension}</div>}
+              <dl>
+                <dt>Como é a rotina</dt><dd>{c.routine}</dd>
+                <dt>Primeiro passo</dt><dd>{c.firstStep}</dd>
+                <dt>Ponto de atenção</dt><dd>{c.attention}</dd>
+                <dt>Para pesquisar</dt><dd>Busque por: <em>“{c.search}”</em></dd>
+              </dl>
+            </details>
+            <button className={selected === c.careerId ? 'btn secondary' : 'btn secondary'} style={{ marginTop: 10 }} onClick={() => choose(c.careerId)}>
+              {selected === c.careerId ? 'Caminho escolhido ✓' : 'Testar este caminho por 7 dias'}
+            </button>
+          </article>
+        )}
         {idx === 0 && !map.broadProfile && !data.diagnostic?.purchased && (
           <a className="diag-remind no-print" href="#diagnostico">
-            <span>Pronto para começar em <strong>{c.name}</strong>?</span>
-            <b>Ver o passo a passo ↑</b>
+            <span>Quer o passo a passo para <strong>{c.name}</strong>?</span>
+            <b>Baixar roteiro ↑</b>
           </a>
         )}
-        {idx === 0 && map.profile && (
-          <section className="card" aria-labelledby="perfil-title">
-            <h2 id="perfil-title" style={{ marginBottom: 4 }}>Seu perfil de interesses</h2>
-            <p className="small muted">O quanto cada tipo de atividade combina com você, pelas suas respostas ao teste (0 a 100).</p>
-            <ul className="profile" role="list">
+        {idx === map.cards.length - 1 && map.profile && (
+          <details className="card profile-card">
+            <summary><strong>Ver seu perfil de interesses</strong></summary>
+            <ul className="profile" role="list" style={{ marginTop: 12 }}>
               {map.profile.map((b) => (
-                // Destaque: as duas maiores e quem empatar com a segunda.
                 <li key={b.id} className={!map.broadProfile && b.score >= map.profile![1].score ? 'top' : ''} title={`${b.label}: ${b.score} de 100`}>
                   <span className="pl"><DimIcon dim={b.id} size={16} className="pl-icon" />{b.label.charAt(0).toUpperCase() + b.label.slice(1)}</span>
                   <span className="pt" aria-hidden="true"><span style={{ width: `${Math.max(b.score, 2)}%` }} /></span>
@@ -248,20 +256,18 @@ export function MapPage() {
                 </li>
               ))}
             </ul>
-          </section>
+          </details>
         )}
         </Fragment>
       ))}
 
-
       {map.leftOut && map.leftOut.length > 0 && (
-        <section className="card soft" aria-labelledby="fora-title">
-          <h3 id="fora-title">Por que outros caminhos ficaram de fora</h3>
+        <details className="card soft">
+          <summary><strong>Por que outros caminhos ficaram de fora</strong></summary>
           {map.leftOut.map((l) => (
-            <p key={l.name} className="small" style={{ marginBottom: 8 }}><strong>{l.name}.</strong> {l.reason}</p>
+            <p key={l.name} style={{ margin: '10px 0 0' }}><strong>{l.name}.</strong> {l.reason}</p>
           ))}
-          <p className="small muted" style={{ marginBottom: 0 }}>Não quer dizer que você não conseguiria: só que, hoje, suas respostas apontam mais para os cinco acima.</p>
-        </section>
+        </details>
       )}
 
       {map.broadProfile && <section className="card interest-card no-print" aria-labelledby="interest-title">
@@ -277,21 +283,21 @@ export function MapPage() {
         <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>Sem compromisso. Você só recebe uma mensagem quando estiver disponível.</p>
       </section>}
 
-      <section id="plano" style={{ marginTop: 24 }}>
-        <h2>Plano de 7 dias</h2>
+      <section id="plano" style={{ marginTop: 28 }}>
+        <span className="kicker">{5 + n0} · Grátis</span>
+        <h2 className="sec-title">Seu plano de 7 dias</h2>
         {!plan ? (
-          <div className="card soft">Escolha acima qual caminho quer experimentar primeiro. Você pode trocar quando quiser.</div>
+          <div className="card soft"><strong>Toque em "Testar este caminho por 7 dias"</strong> em um dos caminhos acima para montar seu plano.</div>
         ) : (
           <>
-            <div className="tabs" role="tablist" aria-label="Escolher caminho do plano">
+            <SwipeRow label="Escolher caminho do plano">
               {map.cards.map((c) => (
-                <button key={c.careerId} role="tab" aria-selected={c.careerId === plan.careerId} onClick={() => choose(c.careerId)}>{c.name}</button>
+                <button key={c.careerId} type="button" role="radio" aria-checked={c.careerId === plan.careerId} onClick={() => choose(c.careerId)}>{c.name}</button>
               ))}
-            </div>
+            </SwipeRow>
             <div className="card">
               <h3>{plan.name}</h3>
-              <p className="small muted">Uma tarefa por dia, de 15 minutos. {map.common.timeExtension}</p>
-              <p className="small"><strong>{doneCount} de 7</strong> concluídas</p>
+              <p className="plan-meta"><strong>{doneCount} de 7</strong> feitas · uma tarefa de 15 min por dia</p>
               {plan.days.map((d, i) => {
                 const day = i + 1;
                 const k = `${plan.careerId}:${day}`;
@@ -307,7 +313,7 @@ export function MapPage() {
 
             <div className="card">
               <h3>Reflexão do dia 7</h3>
-              <p className="small muted">Dê uma nota de 1 a 5. Uma semana é uma experiência inicial, não uma decisão definitiva.</p>
+              <p>Dê uma nota de 1 a 5 para cada ponto.</p>
               {([
                 ['interest', 'Interesse pela tarefa'],
                 ['repeat_wish', 'Vontade de repetir'],
@@ -331,30 +337,30 @@ export function MapPage() {
                   </button>
                 ))}
               </div>
-              <p className="small muted" style={{ marginTop: 10 }}>Sua escolha fica registrada só como reflexão. {map.common.safetyNote}</p>
+
             </div>
           </>
         )}
       </section>
 
-      <div className="card soft">
-        <h3>Como ingressar</h3>
-        <p className="small">{map.common.howToEnter}</p>
-      </div>
+      <details className="card soft">
+        <summary><strong>Como ingressar na área</strong></summary>
+        <p style={{ marginTop: 10 }}>{map.common.howToEnter}</p>
+      </details>
 
       {!interest && (map.broadProfile ? (
         <button className="btn secondary no-print" style={{ marginBottom: 12 }} onClick={markInterest} disabled={interestBusy}>
           Tenho interesse no Roteiro para começar
         </button>
       ) : (
-        <a className="btn secondary no-print" style={{ marginBottom: 12 }} href="#diagnostico">Ver o Roteiro para começar em {map.cards[0].name}</a>
+        <a className="btn no-print" style={{ marginBottom: 12 }} href="#diagnostico">Baixar meu roteiro para {map.cards[0].name}</a>
       ))}
       <button className="btn secondary no-print" onClick={printMap}>Salvar ou imprimir</button>
       {!map.broadProfile && map.cards[0] && !data.diagnostic?.purchased && (
         <ScrollNudge career={map.cards[0].name} paid={data.diagnostic?.mode === 'paid'} />
       )}
-      <p className="small muted" style={{ marginTop: 12 }}>
-        Este mapa fica salvo. Para voltar em outro aparelho, use <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>. Anote ou tire um print.
+      <p className="map-save">
+        <strong>Seu mapa fica salvo.</strong> Para abrir em outro aparelho: <Link to="/acesso">Recuperar acesso</Link> com seu WhatsApp e o código <strong>{data.public_ref}</strong>.
       </p>
     </div>
   );

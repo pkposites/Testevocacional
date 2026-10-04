@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { maskBrPhone, normalizeBrPhone } from '../../shared/phone';
-import { CATALOG_SIZE, QUESTIONS } from '../../shared/quiz';
+import { QUESTIONS } from '../../shared/quiz';
 import { CheckIcon, DimIcon } from '../components/Icons';
 import { api, brl, getConfig, getMySession, storage, type PublicConfig } from '../api';
 import { getConsent, metaCookies, track } from '../analytics';
@@ -110,7 +110,6 @@ export function Preview() {
               <strong>{topCareer.name}</strong>
             </div>
             {topMatch !== null && <span className="th-match">{topMatch}% de afinidade</span>}
-            <span className="th-note">Entre 24 caminhos, é o que mais combina com o que você disse gostar de fazer. Mostra afinidade, não talento.</span>
           </div>
         ) : (
           <h1 style={{ marginTop: 10 }}>Seu resultado está pronto</h1>
@@ -171,10 +170,9 @@ export function Preview() {
         <div className="pv-next">
           <span className="pv-next-tag">Depois, se quiser</span>
           <strong>Roteiro para começar{topCareer ? ` em ${topCareer.name}` : ''}{paidDiag ? ` · ${brl(cfg.diagnostic_price_cents!)}` : ''}</strong>
-          <span>O passo a passo completo para entrar na área: testar a rotina, escolher a formação, montar o primeiro projeto e buscar as primeiras vagas.</span>
+          <span>Seu roteiro em PDF, passo a passo, para entrar na área.</span>
         </div>
 
-        <p className="small muted">Resultado baseado nas suas {QUESTIONS.length} respostas e em {CATALOG_SIZE} caminhos. Mostra o que tende a te dar energia, não garante emprego nem mede talento.</p>
         <p className="small" style={{ marginTop: 16 }}><Link to="/teste">Revisar minhas respostas</Link></p>
       </div>
     );

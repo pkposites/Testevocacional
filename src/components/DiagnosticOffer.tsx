@@ -1,5 +1,5 @@
 // Oferta do Roteiro para começar: a pessoa escolhe o caminho e vê uma amostra real antes de pagar.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, brl } from '../api';
 import { track } from '../analytics';
@@ -19,6 +19,39 @@ const WANTS = [
   { value: 'vagas', label: 'Como conseguir as primeiras oportunidades' },
   { value: 'mentoria', label: 'Conversar com alguém que já trabalha na área' },
 ];
+const PATH_SHORT = { livre: 'Dá para começar sem diploma', tecnico: 'Curso técnico ou livre', regulada: 'Exige formação ou registro' };
+
+/** Linha que rola para o lado, com aviso claro de que há mais opções (seta animada + borda esmaecida). */
+export function SwipeRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [atEnd, setAtEnd] = useState(false);
+  const [moved, setMoved] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => {
+      setOverflow(el.scrollWidth > el.clientWidth + 4);
+      setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+      if (el.scrollLeft > 8) setMoved(true);
+    };
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => { el.removeEventListener('scroll', check); window.removeEventListener('resize', check); };
+  }, []);
+  return (
+    <div className={`swipe${overflow && !atEnd ? ' more' : ''}`}>
+      <div ref={ref} className="chips swipe-track" role="radiogroup" aria-label={label}>{children}</div>
+      {overflow && !moved && (
+        <button type="button" className="swipe-hint" onClick={() => ref.current?.scrollBy({ left: 160, behavior: 'smooth' })}>
+          Deslize para ver os outros <span aria-hidden="true">→</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Barra fixa que convida a descer até o diagnóstico; some quando a oferta aparece na tela. */
 export function ScrollNudge({ career, paid }: { career: string; paid: boolean }) {
   const [show, setShow] = useState(false);
@@ -72,14 +105,13 @@ type Sample = {
   today: { activity: string; routine: string; requirement: string }; requirement: string; path: 'livre' | 'tecnico' | 'regulada';
   proof_teaser: string; tasks: number; first_jobs_count: number; course_terms_count?: number; checklist_count?: number;
 };
-const PATH_LABEL = { livre: 'Dá para começar sem diploma', tecnico: 'Curso técnico ou livre é o caminho comum', regulada: 'Exige formação ou registro' };
 
 export function DiagnosticOffer(props: {
   resultId: string; cards: Card[]; selectedId?: string | null; onSelect?: (careerId: string) => void; context: Ctx; firstName: string;
   interested: boolean; onInterested: () => void; detail?: { want?: string } | null;
   diagnostic?: { mode: 'waitlist' | 'paid'; price_cents: number; purchased: boolean; open_order_id: string | null };
 }) {
-  const { resultId, cards, context, firstName, interested, onInterested, diagnostic } = props;
+  const { resultId, cards, context, interested, onInterested, diagnostic } = props;
   const [chosenId, setChosenId] = useState<string>(props.selectedId && cards.some((c) => c.careerId === props.selectedId) ? props.selectedId : cards[0].careerId);
   const first = cards.find((c) => c.careerId === chosenId) ?? cards[0];
   const [sample, setSample] = useState<Sample | null>(null);
@@ -143,87 +175,79 @@ export function DiagnosticOffer(props: {
   }
 
   const price = diagnostic ? brl(diagnostic.price_cents) : '';
+  const shortPath = sample ? PATH_SHORT[sample.path] : null;
   return (
     <section id="diagnostico" className={`card diag${paid && !purchased ? ' diag-paid' : ''}`} aria-labelledby="diag-title">
       <div className="diag-head">
-        <span className="diag-badge"><SparkIcon size={14} /> {purchased ? 'Liberado para você' : 'Seu próximo passo'}</span>
+        <span className="kicker">{purchased ? 'Liberado para você' : '2 · Seu próximo passo'}</span>
         {!purchased && <p className="diag-pain">{PAIN[context.moment ?? ''] ?? PAIN.explore}</p>}
         <h2 id="diag-title" className="diag-title">
-          {purchased ? <>Seu passo a passo para entrar em {first.name}</> : <>O passo a passo completo para entrar em <span>{first.name}</span></>}
+          {purchased ? <>Seu roteiro para entrar em {first.name}</> : <>Baixe seu roteiro em PDF: como entrar em <span>{first.name}</span>, passo a passo</>}
         </h2>
-        <p className="diag-promise">
-          {firstName}, este roteiro resolve isso: um plano prático de 4 semanas, montado com as suas respostas, dizendo o que fazer, em que ordem, até buscar a primeira vaga.
-        </p>
+        {!purchased && (
+          <ul className="diag-bullets">
+            <li><CheckIcon size={18} /><span>O que fazer em <strong>cada semana</strong>, por 4 semanas</span></li>
+            <li><CheckIcon size={18} /><span>Montado com <strong>as suas respostas</strong></span></li>
+            <li><CheckIcon size={18} /><span><strong>PDF</strong> para baixar e guardar</span></li>
+          </ul>
+        )}
       </div>
 
       {!purchased && cards.length > 1 && (
         <div className="diag-pick">
-          <div className="diag-pick-label">Escolha o caminho do seu plano:</div>
-          <div className="chips" role="radiogroup" aria-label="Caminho do roteiro">
+          <div className="diag-pick-label">Para qual caminho?</div>
+          <SwipeRow label="Caminho do roteiro">
             {cards.map((c) => (
               <button key={c.careerId} type="button" role="radio" aria-checked={c.careerId === first.careerId} onClick={() => pick(c.careerId)}>
                 {c.name}{c.match !== undefined ? ` · ${c.match}%` : ''}
               </button>
             ))}
-          </div>
+          </SwipeRow>
         </div>
       )}
 
+      <div className="diag-steps-title">O que tem no roteiro</div>
       <ol className="diag-steps" aria-live="polite">
         <li className="open">
           <span className="diag-step-n">1</span>
           <span>
             <strong>Testar a rotina da área</strong>
-            {sample ? <em className="ds-free"><b>Faça hoje (grátis):</b> {sample.today.activity.replace(/^Faça esta atividade:\s*/, '')}</em> : <em>antes de gastar com curso</em>}
+            {sample ? <em className="ds-free"><b>Grátis, faça hoje:</b> {sample.today.activity.replace(/^Faça esta atividade:\s*/, '')}</em> : <em>antes de gastar com curso</em>}
           </span>
         </li>
         <li className={purchased ? '' : 'locked'}>
           <span className="diag-step-n">2</span>
-          <span>
-            <strong>Escolher a formação certa</strong>
-            <em>{sample ? `${PATH_LABEL[sample.path]} · ${sample.course_terms_count ?? 3} cursos para pesquisar e ${sample.checklist_count ?? 6} sinais de curso bom ou furado` : 'o que a área exige de verdade'}</em>
-          </span>
+          <span><strong>Escolher a formação certa</strong><em>{shortPath ?? 'o que a área exige'}</em></span>
           {!purchased && <LockIcon size={16} className="diag-step-lock" />}
         </li>
         <li className={purchased ? '' : 'locked'}>
           <span className="diag-step-n">3</span>
-          <span>
-            <strong>Montar seu primeiro projeto</strong>
-            <em>{sample ? sample.proof_teaser : 'algo concreto para mostrar'}</em>
-          </span>
+          <span><strong>Montar seu primeiro projeto</strong><em>algo concreto para mostrar</em></span>
           {!purchased && <LockIcon size={16} className="diag-step-lock" />}
         </li>
         <li className={purchased ? '' : 'locked'}>
           <span className="diag-step-n">4</span>
-          <span>
-            <strong>Buscar as primeiras vagas</strong>
-            <em>{sample ? `${sample.first_jobs_count} cargos para procurar e uma conversa com quem já trabalha nisso` : 'onde procurar e o que pesquisar'}</em>
-          </span>
+          <span><strong>Buscar as primeiras vagas</strong><em>{sample ? `${sample.first_jobs_count} cargos para procurar` : 'onde procurar'}</em></span>
           {!purchased && <LockIcon size={16} className="diag-step-lock" />}
         </li>
       </ol>
 
-      {!purchased && (
-        <div className="diag-vs">
-          <div><span>Sem um plano</span><strong>pesquisa sem fim, curso errado e a mudança fica para depois</strong></div>
-          <div className="hl"><span>Com o roteiro</span><strong>você sabe o que fazer hoje, nesta semana e no mês</strong></div>
-        </div>
-      )}
-
       {purchased ? (
-        <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir meu passo a passo</button>
+        <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir e baixar meu roteiro</button>
       ) : paid ? (
         <div className="diag-buy">
-          <p className="diag-anchor">Um curso escolhido errado custa centenas de reais. Antes, teste a área com um plano feito para você:</p>
+          <p className="diag-anchor">Evite gastar com o curso errado.</p>
           <div className="diag-price">
             <strong>{price}</strong>
-            <span>Pagamento único no Pix · liberado na hora</span>
           </div>
           <button className="btn diag-cta" onClick={buy} disabled={busy}>
-            {busy ? 'Gerando Pix…' : <>Quero meu passo a passo completo</>}
+            {busy ? 'Gerando Pix…' : <>Quero baixar meu roteiro</>}
           </button>
-          <div className="diag-guarantee"><CheckIcon size={18} /><span><strong>Garantia de 7 dias:</strong> se não gostar, devolvemos seu dinheiro.</span></div>
-          <p className="diag-foot">{sample?.tasks ?? tasks} tarefas guiadas · {minutes} min por dia · fica salvo no seu WhatsApp</p>
+          <ul className="diag-trust">
+            <li><CheckIcon size={15} /> Pix, liberado na hora</li>
+            <li><CheckIcon size={15} /> Garantia de 7 dias</li>
+            <li><CheckIcon size={15} /> {sample?.tasks ?? tasks} tarefas</li>
+          </ul>
           <BuyBar career={first.name} price={price} busy={busy} onBuy={buy} />
         </div>
       ) : !interested ? (
