@@ -1195,6 +1195,45 @@ route('GET', '/api/admin/analytics', async (app, ctx) => {
   return res;
 });
 
+/**
+ * Mensagem de recuperação de um lead, para o admin enviar pelo próprio WhatsApp Business (wa.me).
+ * Quem não marcou "novidades" recebe só a mensagem de serviço (link do mapa + passo de hoje);
+ * quem marcou recebe também a oferta do roteiro. Registra o contato para não mandar duas vezes.
+ */
+const brlText = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`;
+
+route('POST', '/api/admin/leads/:id/recovery', async (app, ctx) => {
+  requireAdmin(app, ctx);
+  const order = await one(app.db, `select o.*, r.snapshot, r.answers from orders o join results r on r.id = o.result_id
+    where o.id = $1 and o.provider = 'free'`, [ctx.params.id]);
+  if (!order) throw new ApiError(404, 'not_found', 'Lead não encontrado.');
+  const snap = order.snapshot as ResultSnapshot;
+  const card = snap.cards[0];
+  const name = String(order.buyer_name).split(' ')[0];
+  const link = await accessLink(app, order.buyer_phone, 'recover', 7 * 24 * 60);
+  const d = buildDiagnostic(snap, order.answers, card?.careerId);
+  const today = d.today?.activity.replace(/^Faça esta atividade:\s*/, '').replace(/\.$/, '') ?? '';
+  const career = card ? `${card.name}${card.match !== undefined ? ` (${card.match}% de afinidade)` : ''}` : 'o seu caminho';
+  const lines = [
+    `Oi, ${name}! Aqui é do Mapa da Carreira 👋`,
+    '',
+    `Seu resultado ficou salvo: seu 1º caminho é *${career}*.`,
+    `Abra seu mapa por este link (vale 7 dias): ${link}`,
+  ];
+  if (today) lines.push('', `Um passo para fazer hoje, grátis: ${today.charAt(0).toLowerCase()}${today.slice(1)}.`);
+  if (order.marketing_opt_in && app.cfg.diagnosticMode === 'paid') {
+    lines.push('', `Se quiser ir direto ao ponto: no seu mapa tem o *passo a passo completo para entrar em ${card?.name ?? 'na área'}*, um plano de 4 semanas feito com as suas respostas, por ${brlText(app.cfg.diagnosticPriceCents)} no Pix, com garantia de 7 dias.`);
+  } else {
+    lines.push('', 'No seu mapa também tem o passo a passo completo para começar na área, se você quiser.');
+  }
+  lines.push('', 'Qualquer dúvida, é só responder aqui. Se não quiser receber mensagens, responda SAIR.');
+  const text = lines.join('\n');
+  const body = await readJson(ctx).catch(() => ({}));
+  await app.db.query(`insert into admin_audit (operator, action, order_id, note) values ($1, 'recovery', $2, $3)`,
+    [String(body.operator ?? 'admin').slice(0, 60), order.id, order.marketing_opt_in ? 'oferta' : 'servico']);
+  return json(ctx, 200, { ok: true, text, link, offer: !!order.marketing_opt_in, wa_url: `https://wa.me/${order.buyer_phone}?text=${encodeURIComponent(text)}` });
+});
+
 route('GET', '/api/admin/leads', async (app, ctx) => {
   requireAdmin(app, ctx);
   const onlyInterest = ctx.url.searchParams.get('interest') === '1';
@@ -1203,7 +1242,9 @@ route('GET', '/api/admin/leads', async (app, ctx) => {
        r.snapshot->'cards'->0->>'name' as career, r.context->>'moment' as moment, r.context->>'dailyTime' as daily_time,
        o.attribution->>'utm_content' as utm_content, o.attribution->>'utm_term' as utm_term,
        (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done,
-       (select ev.attribution from events ev where ev.event_id = 'interestdetail_' || o.id) as interest_detail
+       (select ev.attribution from events ev where ev.event_id = 'interestdetail_' || o.id) as interest_detail,
+       (select max(a.created_at) from admin_audit a where a.order_id = o.id and a.action = 'recovery') as contacted_at,
+       exists (select 1 from orders d where d.result_id = o.result_id and d.public_ref like 'DG-%' and d.status = 'paid') as bought_roteiro
      from orders o join results r on r.id = o.result_id
      where o.provider = 'free' and ${MAP_ONLY('o')} and ${NOT_INTERNAL('o.')} ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
      order by coalesce(o.diagnostic_interest_at, o.created_at) desc limit 1000`,

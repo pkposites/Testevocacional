@@ -479,3 +479,10 @@ body.has-buybar { padding-bottom: 76px; }
 .diag-remind strong { color: #ffb48a; }
 .diag-remind b { white-space: nowrap; color: #fff; }
 .viz-spend { margin: -4px 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.wa-cell { min-width: 170px; }
+.wa-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 10px; padding: 8px 12px; background: #128c4a; color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+.wa-btn.done { background: #e7f6ec; color: #0f6b39; }
+.wa-btn:disabled { opacity: 0.7; }
+.wa-tag { display: block; margin-top: 4px; font-size: 0.75rem; color: var(--muted); }
+.wa-tag.ok { color: #0f6b39; font-weight: 700; }
+.wa-last { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
