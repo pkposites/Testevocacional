@@ -4,7 +4,7 @@ import { DIMENSIONS, DIMENSION_LABELS, type Answers, type Dimension, type QuizCo
 import { CAREERS, DIMENSION_ACTIVITIES, type Career } from './content/careers.v1';
 import {
   AREA_KEYWORDS, CAREER_DIAGNOSTICS, COURSE_CHECKLIST, COURSE_RED_FLAGS, DIAGNOSTIC_VERSION,
-  DIM_MITIGATION, DIM_STRENGTH, DIM_TRANSFER,
+  DIM_MITIGATION, DIM_STRENGTH, DIM_TRANSFER, START_COURSE, STUDY_SOURCES, type StudySource,
 } from './content/diagnostic.v1';
 import { careerVector, demandedDims, evidenceFor, tensionFor, topDims, userVector, type ResultSnapshot } from './scoring';
 
@@ -20,6 +20,10 @@ export type Diagnostic = {
   /** Primeiro passo para hoje, antes de pagar qualquer curso. */
   today: { activity: string; routine: string; requirement: string };
   formation: { path: 'livre' | 'tecnico' | 'regulada'; text: string; courseTerms: string[]; checklist: string[]; redFlags: string[]; warning: string | null };
+  /** Como estudar de graça desde já: onde, o que pesquisar e como encaixar no plano. */
+  freeStudy: { sources: StudySource[]; searches: string[]; rhythm: string };
+  /** Qual curso fazer para começar, conforme o tipo de entrada da área. */
+  startCourse: { text: string; first: string; next: string[] };
   experience: { area: string | null; carries: string[]; text: string };
   strengths: string[];
   attention: { point: string; plan: string }[];
@@ -204,6 +208,12 @@ export function buildDiagnostic(snapshot: ResultSnapshot, answers: Answers, care
       redFlags: COURSE_RED_FLAGS,
       warning: d.courseWarning ?? null,
     },
+    freeStudy: {
+      sources: STUDY_SOURCES[c.id] ?? [],
+      searches: [...d.courseTerms.slice(0, 2).map((t) => `${t} gratuito`), `${c.search} na prática`],
+      rhythm: `Em 2 dias da semana, use seus ${minutes} minutos para estudar por essas fontes; nos outros dias, faça as tarefas práticas do plano.`,
+    },
+    startCourse: { text: START_COURSE[d.path](d.courseTerms[0]), first: d.courseTerms[0], next: d.courseTerms.slice(1) },
     experience: { area, carries, text: expText },
     strengths,
     attention,

@@ -3,7 +3,7 @@ import type { App } from '../server/services';
 import { buildDiagnostic } from '../server/diagnostic';
 import { computeResult } from '../server/scoring';
 import { CAREERS } from '../server/content/careers.v1';
-import { CAREER_DIAGNOSTICS } from '../server/content/diagnostic.v1';
+import { CAREER_DIAGNOSTICS, STUDY_SOURCES } from '../server/content/diagnostic.v1';
 import { QUESTIONS } from '../shared/quiz';
 import { analyticAnswers, Client, fakeWebhook, lastResourceId, makeApp } from './helpers';
 import { fakeStore } from '../server/payments/fake';
@@ -148,6 +148,7 @@ describe('diagnóstico pago', () => {
 describe('conteúdo do diagnóstico', () => {
   it('toda carreira tem conteúdo e o plano muda com tempo, momento e área', () => {
     for (const c of CAREERS) expect(CAREER_DIAGNOSTICS[c.id], c.name).toBeDefined();
+    for (const c of CAREERS) expect(STUDY_SOURCES[c.id]?.length, c.name).toBeGreaterThan(0);
     const answers = analyticAnswers();
     const a = computeResult(answers, { moment: 'first', dailyTime: 15 }).snapshot;
     const b = computeResult(answers, { moment: 'change', dailyTime: 60, currentArea: 'vendas em loja' }).snapshot;
@@ -171,6 +172,10 @@ describe('conteúdo do diagnóstico', () => {
         expect(d.why.length).toBeGreaterThan(0);
         expect(d.attention.length).toBeGreaterThan(0);
         expect(d.weeks.flatMap((w) => w.tasks).join(' ')).not.toMatch(/undefined|null/);
+        expect(d.freeStudy.sources.length).toBeGreaterThan(0);
+        expect(d.freeStudy.searches.length).toBe(3);
+        expect(d.startCourse.first).toBe(d.formation.courseTerms[0]);
+        expect(d.startCourse.text).not.toMatch(/undefined/);
       }
     }
   });

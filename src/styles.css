@@ -535,3 +535,4 @@ body.has-buybar { padding-bottom: 76px; }
 .career details > summary, details.card > summary { color: var(--accent-dark); font-weight: 700; }
 .career details > summary::after, details.card > summary::after { content: ' ▾'; }
 .career details[open] > summary::after, details.card[open] > summary::after { content: ' ▴'; }
+.diag-buy + .diag-steps-title, .diag > .btn + .diag-steps-title { margin-top: 22px; padding-top: 16px; border-top: 1px dashed #f3c9ad; }

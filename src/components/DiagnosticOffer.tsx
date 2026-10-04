@@ -6,11 +6,6 @@ import { track } from '../analytics';
 import { CheckIcon, LockIcon, SparkIcon } from './Icons';
 
 type Card = { careerId: string; name: string; attention: string; tension?: string | null; dim?: string; match?: number };
-const PAIN: Record<string, string> = {
-  change: 'Quer mudar de área, mas não sabe por onde começar nem em qual curso confiar?',
-  first: 'Escolhendo a primeira área e com medo de perder tempo e dinheiro no caminho errado?',
-  explore: 'Já sabe o caminho que combina com você, mas não sabe qual é o primeiro passo?',
-};
 type Ctx = { moment?: string; dailyTime?: number; currentArea?: string };
 
 const WANTS = [
@@ -180,15 +175,16 @@ export function DiagnosticOffer(props: {
     <section id="diagnostico" className={`card diag${paid && !purchased ? ' diag-paid' : ''}`} aria-labelledby="diag-title">
       <div className="diag-head">
         <span className="kicker">{purchased ? 'Liberado para você' : '2 · Seu próximo passo'}</span>
-        {!purchased && <p className="diag-pain">{PAIN[context.moment ?? ''] ?? PAIN.explore}</p>}
         <h2 id="diag-title" className="diag-title">
-          {purchased ? <>Seu roteiro para entrar em {first.name}</> : <>Baixe seu roteiro em PDF: como entrar em <span>{first.name}</span>, passo a passo</>}
+          {purchased ? <>Seu roteiro para entrar em {first.name}</> : <>Baixe em PDF o seu plano passo a passo para entrar em <span>{first.name}</span></>}
         </h2>
         {!purchased && (
           <ul className="diag-bullets">
-            <li><CheckIcon size={18} /><span>O que fazer em <strong>cada semana</strong>, por 4 semanas</span></li>
-            <li><CheckIcon size={18} /><span>Montado com <strong>as suas respostas</strong></span></li>
-            <li><CheckIcon size={18} /><span><strong>PDF</strong> para baixar e guardar</span></li>
+            <li><CheckIcon size={18} /><span><strong>Plano passo a passo</strong> de 4 semanas, com o que fazer em cada uma</span></li>
+            <li><CheckIcon size={18} /><span><strong>Como estudar de graça</strong> desde já: onde e o que pesquisar</span></li>
+            <li><CheckIcon size={18} /><span><strong>Qual curso fazer</strong> para começar na área (e quais evitar)</span></li>
+            <li><CheckIcon size={18} /><span><strong>Seu primeiro projeto</strong> para mostrar em entrevistas</span></li>
+            <li><CheckIcon size={18} /><span><strong>Onde buscar as primeiras vagas</strong>{sample ? ` (${sample.first_jobs_count} cargos para procurar)` : ''}</span></li>
           </ul>
         )}
       </div>
@@ -206,31 +202,6 @@ export function DiagnosticOffer(props: {
         </div>
       )}
 
-      <div className="diag-steps-title">O que tem no roteiro</div>
-      <ol className="diag-steps" aria-live="polite">
-        <li className="open">
-          <span className="diag-step-n">1</span>
-          <span>
-            <strong>Testar a rotina da área</strong>
-            {sample ? <em className="ds-free"><b>Grátis, faça hoje:</b> {sample.today.activity.replace(/^Faça esta atividade:\s*/, '')}</em> : <em>antes de gastar com curso</em>}
-          </span>
-        </li>
-        <li className={purchased ? '' : 'locked'}>
-          <span className="diag-step-n">2</span>
-          <span><strong>Escolher a formação certa</strong><em>{shortPath ?? 'o que a área exige'}</em></span>
-          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
-        </li>
-        <li className={purchased ? '' : 'locked'}>
-          <span className="diag-step-n">3</span>
-          <span><strong>Montar seu primeiro projeto</strong><em>algo concreto para mostrar</em></span>
-          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
-        </li>
-        <li className={purchased ? '' : 'locked'}>
-          <span className="diag-step-n">4</span>
-          <span><strong>Buscar as primeiras vagas</strong><em>{sample ? `${sample.first_jobs_count} cargos para procurar` : 'onde procurar'}</em></span>
-          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
-        </li>
-      </ol>
 
       {purchased ? (
         <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir e baixar meu roteiro</button>
@@ -269,6 +240,31 @@ export function DiagnosticOffer(props: {
           {detail.want && <p className="small muted" style={{ margin: '10px 0 0' }}>Obrigado! Isso nos ajuda a preparar o seu roteiro.</p>}
         </div>
       )}
+      <div className="diag-steps-title">Como funciona, em 4 etapas</div>
+      <ol className="diag-steps" aria-live="polite">
+        <li className="open">
+          <span className="diag-step-n">1</span>
+          <span>
+            <strong>Testar a rotina da área</strong>
+            {sample ? <em className="ds-free"><b>Grátis, faça hoje:</b> {sample.today.activity.replace(/^Faça esta atividade:\s*/, '')}</em> : <em>antes de gastar com curso</em>}
+          </span>
+        </li>
+        <li className={purchased ? '' : 'locked'}>
+          <span className="diag-step-n">2</span>
+          <span><strong>Escolher a formação certa</strong><em>{shortPath ?? 'o que a área exige'}</em></span>
+          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
+        </li>
+        <li className={purchased ? '' : 'locked'}>
+          <span className="diag-step-n">3</span>
+          <span><strong>Montar seu primeiro projeto</strong><em>algo concreto para mostrar</em></span>
+          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
+        </li>
+        <li className={purchased ? '' : 'locked'}>
+          <span className="diag-step-n">4</span>
+          <span><strong>Buscar as primeiras vagas</strong><em>{sample ? `${sample.first_jobs_count} cargos para procurar` : 'onde procurar'}</em></span>
+          {!purchased && <LockIcon size={16} className="diag-step-lock" />}
+        </li>
+      </ol>
       {error && <div className="status error" role="alert">{error}</div>}
     </section>
   );

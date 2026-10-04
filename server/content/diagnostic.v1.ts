@@ -309,3 +309,52 @@ export const COURSE_RED_FLAGS = [
   'Não mostra o conteúdo nem quem ensina.',
   'Vende "certificado reconhecido" sem dizer reconhecido por quem.',
 ];
+
+/**
+ * Onde estudar de graça, por grupo de área. Só instituições conhecidas com cursos gratuitos;
+ * sem links nem promessas de certificado específico (a oferta de cada uma muda com o tempo).
+ */
+export type StudySource = { name: string; how: string };
+const SRC = {
+  bradesco: { name: 'Escola Virtual da Fundação Bradesco', how: 'cursos online gratuitos, inclusive de Excel, informática e gestão' },
+  senai: { name: 'SENAI (cursos gratuitos a distância)', how: 'cursos de introdução em áreas técnicas e industriais' },
+  senac: { name: 'Senac (vagas gratuitas do Programa Senac de Gratuidade)', how: 'cursos de qualificação; confira as vagas da sua cidade' },
+  sebrae: { name: 'Sebrae (cursos online gratuitos)', how: 'vendas, atendimento, gestão e como empreender' },
+  evg: { name: 'Escola Virtual de Governo (EV.G)', how: 'cursos gratuitos de gestão, administração e educação' },
+  youtube: { name: 'YouTube', how: 'aulas práticas para ver como o trabalho é feito de verdade' },
+  platform: { name: 'As próprias ferramentas da área', how: 'muitas oferecem tutoriais oficiais gratuitos para iniciantes' },
+} satisfies Record<string, StudySource>;
+
+export const STUDY_SOURCES: Record<string, StudySource[]> = {
+  '01': [{ name: 'Meta Blueprint e Google Skillshop', how: 'formação oficial e gratuita das próprias plataformas de anúncio' }, SRC.youtube, SRC.sebrae],
+  '02': [SRC.bradesco, { name: 'Kaggle Learn', how: 'cursos curtos e gratuitos de dados, com exercícios' }, SRC.youtube],
+  '03': [{ name: 'MDN Web Docs', how: 'material gratuito e completo de HTML, CSS e JavaScript' }, { name: 'freeCodeCamp', how: 'trilha gratuita com exercícios e projetos' }, SRC.youtube],
+  '04': [SRC.platform, SRC.bradesco, SRC.youtube],
+  '05': [SRC.platform, SRC.sebrae, SRC.youtube],
+  '06': [SRC.sebrae, SRC.bradesco, SRC.youtube],
+  '07': [SRC.bradesco, SRC.evg, SRC.senac],
+  '08': [SRC.evg, SRC.bradesco, SRC.youtube],
+  '09': [SRC.evg, SRC.bradesco, SRC.senac],
+  '10': [SRC.evg, SRC.bradesco, SRC.youtube],
+  '11': [SRC.senai, SRC.bradesco, SRC.senac],
+  '12': [SRC.senai, SRC.bradesco, SRC.youtube],
+  '13': [SRC.platform, SRC.bradesco, SRC.youtube],
+  '14': [SRC.bradesco, SRC.sebrae, SRC.evg],
+  '15': [SRC.youtube, SRC.platform, SRC.senac],
+  '16': [SRC.senai, SRC.youtube, SRC.bradesco],
+  '17': [SRC.senac, SRC.sebrae, SRC.youtube],
+  '18': [SRC.senac, SRC.sebrae, SRC.youtube],
+  '19': [SRC.evg, SRC.senac, SRC.bradesco],
+  '20': [SRC.sebrae, SRC.bradesco, SRC.youtube],
+  '21': [SRC.sebrae, SRC.bradesco, SRC.evg],
+  '22': [SRC.senac, SRC.sebrae, SRC.youtube],
+  '23': [SRC.bradesco, SRC.youtube, SRC.sebrae],
+  '24': [SRC.youtube, SRC.evg, SRC.senac],
+};
+
+/** Qual curso fazer primeiro, conforme o tipo de entrada da área. */
+export const START_COURSE: Record<CareerDiagnostic['path'], (term: string) => string> = {
+  livre: (t) => `Comece por um curso curto e gratuito de “${t}”. Só pague um curso depois de terminar a 2ª semana do plano e confirmar que gosta da rotina.`,
+  tecnico: (t) => `O caminho mais comum é um curso de qualificação ou técnico de “${t}”. Antes de se matricular, faça um curso gratuito de introdução e a 1ª semana do plano.`,
+  regulada: (t) => `Para trabalhar na área é preciso formação reconhecida (“${t}”). Antes de pagar, confira se o curso é reconhecido pelo órgão ou conselho da profissão e se cumpre as normas exigidas na área.`,
+};

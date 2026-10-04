@@ -13,6 +13,8 @@ type Diagnostic = {
   minutesPerDay: number;
   today?: { activity: string; routine: string; requirement: string };
   formation: { path: 'livre' | 'tecnico' | 'regulada'; text: string; courseTerms: string[]; checklist: string[]; redFlags: string[]; warning: string | null };
+  freeStudy?: { sources: { name: string; how: string }[]; searches: string[]; rhythm: string };
+  startCourse?: { text: string; first: string; next: string[] };
   experience: { area: string | null; carries: string[]; text: string };
   strengths: string[];
   attention: { point: string; plan: string }[];
@@ -95,6 +97,29 @@ export function DiagnosticPage() {
             <li>{d.today.requirement}</li>
           </ol>
           <p className="small muted" style={{ margin: 0 }}>Leva menos de {d.minutesPerDay} minutos e já mostra se vale a pena seguir.</p>
+        </section>
+      )}
+
+      {d.freeStudy && (
+        <section className="card">
+          <span className="kicker">Comece sem gastar</span>
+          <h2 style={{ margin: '6px 0 10px' }}>Como estudar de graça desde já</h2>
+          <ul className="dg-list">
+            {d.freeStudy.sources.map((src) => <li key={src.name}><CheckIcon size={16} className="diag-li-icon" /><span><strong>{src.name}:</strong> {src.how}</span></li>)}
+          </ul>
+          <h3>O que pesquisar</h3>
+          <ul className="dg-terms">{d.freeStudy.searches.map((t) => <li key={t}>“{t}”</li>)}</ul>
+          <p style={{ marginBottom: 0 }}>{d.freeStudy.rhythm}</p>
+        </section>
+      )}
+
+      {d.startCourse && (
+        <section className="card">
+          <span className="kicker">Seu primeiro curso</span>
+          <h2 style={{ margin: '6px 0 10px' }}>Qual curso fazer para começar</h2>
+          <p><strong>Comece por:</strong> “{d.startCourse.first}”</p>
+          <p>{d.startCourse.text}</p>
+          {d.startCourse.next.length > 0 && <p style={{ marginBottom: 0 }}><strong>Depois:</strong> {d.startCourse.next.map((t) => `“${t}”`).join(' e ')}.</p>}
         </section>
       )}
 
