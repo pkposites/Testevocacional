@@ -536,3 +536,24 @@ body.has-buybar { padding-bottom: 76px; }
 .career details > summary::after, details.card > summary::after { content: ' ▾'; }
 .career details[open] > summary::after, details.card[open] > summary::after { content: ' ▴'; }
 .diag-buy + .diag-steps-title, .diag > .btn + .diag-steps-title { margin-top: 22px; padding-top: 16px; border-top: 1px dashed #f3c9ad; }
+.wa-btn.pix { background: #c2410c; }
+.wa-tag.warn { color: #b45309; font-weight: 700; margin: 0 0 4px; }
+/* Prévia do PDF do roteiro (capa + página interna borrada) */
+.pdf-preview { position: relative; display: flex; justify-content: center; gap: 0; margin: 4px 0 16px; height: 210px; }
+.pdf-page { width: 150px; height: 200px; border-radius: 8px; background: #fff; border: 1px solid var(--line); box-shadow: 0 8px 22px rgba(19, 41, 75, 0.14); padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.pdf-cover { z-index: 2; transform: rotate(-4deg) translateX(14px); border-top: 6px solid var(--accent); }
+.pdf-inner { z-index: 1; transform: rotate(4deg) translateX(-14px) translateY(6px); position: relative; }
+.pdf-brand { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-dark); }
+.pdf-cover strong { font-size: 0.82rem; line-height: 1.2; color: var(--title); }
+.pdf-for { font-size: 0.62rem; color: var(--muted); }
+.pdf-cover ol { margin: 6px 0 0; padding-left: 14px; font-size: 0.62rem; color: var(--title); display: grid; gap: 2px; }
+.pdf-inner b { font-size: 0.66rem; color: var(--title); margin-top: 4px; }
+.pdf-inner span { display: block; height: 6px; border-radius: 99px; background: #dfe5ee; filter: blur(1px); }
+.pdf-inner span:nth-of-type(2n) { width: 80%; }
+.pdf-inner i { position: absolute; right: 10px; bottom: 10px; width: 28px; height: 28px; border-radius: 99px; background: var(--accent); color: #fff; display: grid; place-items: center; font-style: normal; }
+.pdf-badge { position: absolute; z-index: 3; top: 0; right: calc(50% - 150px); background: #b42318; color: #fff; font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; }
+.pdf-preview { height: 240px; margin-bottom: 10px; }
+.pdf-page { height: 220px; overflow: hidden; }
+.pdf-cover strong { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.pdf-cover ol { gap: 1px; }
+.pay-steps { list-style: none; padding-left: 0; }

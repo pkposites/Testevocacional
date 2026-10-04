@@ -485,8 +485,14 @@ route('POST', '/api/orders', async (app, ctx) => {
       [publicRef(), resultId, s.id, app.cfg.paymentProvider, app.cfg.priceCents, name, phone, !!body.marketing_opt_in, idemKey, JSON.stringify(attribution)],
     );
   }
+  const pixBefore = Number((await one(app.db, 'select count(*) n from payments where order_id = $1', [order!.id]))?.n ?? 0);
   await ensureCheckout(app, order);
   order = await one(app.db, 'select * from orders where id = $1', [order!.id]);
+  const pixAfter = Number((await one(app.db, 'select count(*) n from payments where order_id = $1', [order!.id]))?.n ?? 0);
+  // Aviso no celular do admin a cada Pix novo do roteiro (para acompanhar e recuperar quem não pagar).
+  if (pixAfter > pixBefore && order!.attribution?.internal !== '1') {
+    await notifyAdmins(app, { title: `🟠 Pix gerado: ${brlText(order!.amount_cents)}`, body: `${String(order!.buyer_name).split(' ')[0]} gerou o Pix do roteiro (${order!.public_ref}). Se não pagar, recupere em Leads → Pix não pago.`, url: '/admin', tag: `pix-${order!.id}` });
+  }
   await recordEvent(app, { eventId: `ic_${order!.id}`, name: 'InitiateCheckout', sessionId: s.id, orderId: order!.id, attribution: s.attribution });
   return json(ctx, 200, await orderView(app, order));
 });
@@ -1214,6 +1220,23 @@ route('POST', '/api/admin/leads/:id/recovery', async (app, ctx) => {
   const d = buildDiagnostic(snap, order.answers, card?.careerId);
   const today = d.today?.activity.replace(/^Faça esta atividade:\s*/, '').replace(/\.$/, '') ?? '';
   const career = card ? `${card.name}${card.match !== undefined ? ` (${card.match}% de afinidade)` : ''}` : 'o seu caminho';
+  const body = await readJson(ctx).catch(() => ({}));
+  if (body.kind === 'pix') {
+    // Gerou o Pix do roteiro e não pagou: mensagem transacional, com link para gerar um Pix novo.
+    const ent = await one(app.db, 'select selected_career_id from entitlements where order_id = $1', [order.id]);
+    const chosen = snap.cards.find((x) => x.careerId === ent?.selected_career_id) ?? card;
+    const text = [
+      `Oi, ${name}! Aqui é do Mapa da Carreira 👋`,
+      '',
+      `Vi que você gerou o Pix do seu *roteiro para entrar em ${chosen?.name ?? 'na área'}*, mas o pagamento não foi concluído.`,
+      `Seu roteiro continua reservado. Para gerar um Pix novo, abra seu mapa por este link e toque em "Quero baixar meu roteiro": ${link}`,
+      '',
+      `São ${brlText(app.cfg.diagnosticPriceCents)}, pagamento único, com garantia de 7 dias.`,
+      'Se teve alguma dúvida ou problema com o Pix, me responde aqui que eu te ajudo.',
+    ].join('\n');
+    await app.db.query(`insert into admin_audit (operator, action, order_id, note) values ($1, 'recovery', $2, 'pix')`, [String(body.operator ?? 'admin').slice(0, 60), order.id]);
+    return json(ctx, 200, { ok: true, text, link, offer: true, wa_url: `https://wa.me/${order.buyer_phone}?text=${encodeURIComponent(text)}` });
+  }
   const lines = [
     `Oi, ${name}! Aqui é do Mapa da Carreira 👋`,
     '',
@@ -1228,7 +1251,6 @@ route('POST', '/api/admin/leads/:id/recovery', async (app, ctx) => {
   }
   lines.push('', 'Qualquer dúvida, é só responder aqui. Se não quiser receber mensagens, responda SAIR.');
   const text = lines.join('\n');
-  const body = await readJson(ctx).catch(() => ({}));
   await app.db.query(`insert into admin_audit (operator, action, order_id, note) values ($1, 'recovery', $2, $3)`,
     [String(body.operator ?? 'admin').slice(0, 60), order.id, order.marketing_opt_in ? 'oferta' : 'servico']);
   return json(ctx, 200, { ok: true, text, link, offer: !!order.marketing_opt_in, wa_url: `https://wa.me/${order.buyer_phone}?text=${encodeURIComponent(text)}` });
@@ -1237,6 +1259,7 @@ route('POST', '/api/admin/leads/:id/recovery', async (app, ctx) => {
 route('GET', '/api/admin/leads', async (app, ctx) => {
   requireAdmin(app, ctx);
   const onlyInterest = ctx.url.searchParams.get('interest') === '1';
+  const onlyPix = ctx.url.searchParams.get('pix') === '1';
   const rows = await app.db.query(
     `select o.id, o.public_ref, o.buyer_name, o.buyer_phone, o.created_at, o.diagnostic_interest_at, o.public_name_ok, o.marketing_opt_in,
        r.snapshot->'cards'->0->>'name' as career, r.context->>'moment' as moment, r.context->>'dailyTime' as daily_time,
@@ -1244,12 +1267,16 @@ route('GET', '/api/admin/leads', async (app, ctx) => {
        (select count(*) from progress g join entitlements e on e.id = g.entitlement_id where e.order_id = o.id and g.checked)::int as days_done,
        (select ev.attribution from events ev where ev.event_id = 'interestdetail_' || o.id) as interest_detail,
        (select max(a.created_at) from admin_audit a where a.order_id = o.id and a.action = 'recovery') as contacted_at,
-       exists (select 1 from orders d where d.result_id = o.result_id and d.public_ref like 'DG-%' and d.status = 'paid') as bought_roteiro
+       exists (select 1 from orders d where d.result_id = o.result_id and d.public_ref like 'DG-%' and d.status = 'paid') as bought_roteiro,
+       (select max(d.created_at) from orders d where d.result_id = o.result_id and d.public_ref like 'DG-%'
+          and d.status <> 'paid' and exists (select 1 from payments pp where pp.order_id = d.id)) as pix_unpaid_at
      from orders o join results r on r.id = o.result_id
      where o.provider = 'free' and ${MAP_ONLY('o')} and ${NOT_INTERNAL('o.')} ${onlyInterest ? 'and o.diagnostic_interest_at is not null' : ''}
      order by coalesce(o.diagnostic_interest_at, o.created_at) desc limit 1000`,
   );
-  return json(ctx, 200, { leads: rows });
+  // "Pix não pago": gerou o Pix do roteiro e não concluiu (e não comprou depois).
+  const leads = onlyPix ? rows.filter((r) => r.pix_unpaid_at && !r.bought_roteiro) : rows;
+  return json(ctx, 200, { leads });
 });
 
 route('GET', '/api/admin/alerts', async (app, ctx) => {

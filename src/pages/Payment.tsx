@@ -1,3 +1,4 @@
+import { CheckIcon } from '../components/Icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, brl, getConfig, supportHref, type PublicConfig } from '../api';
@@ -190,43 +191,45 @@ export function Payment() {
   const secs = left !== null ? Math.floor((left % 60000) / 1000) : null;
 
   return (
-    <div className="wrap">
-      <h1>Pague com Pix para liberar seu {isDiag(o) ? 'Roteiro para começar' : 'mapa'}</h1>
-      <div className="status info" role="status">
-        <span className="spinner dark" aria-hidden="true" /> Estamos aguardando a confirmação do Pix
+    <div className="wrap pay">
+      <span className="kicker">Último passo</span>
+      <h1 className="pay-title">Falta só o Pix: {brl(o.amount_cents)}</h1>
+      <p className="pay-sub">{isDiag(o) ? 'Seu roteiro em PDF é liberado aqui assim que o banco confirmar.' : 'Seu mapa é liberado aqui assim que o banco confirmar.'}</p>
+
+      <button className="btn pay-copy" onClick={copy}>{copied ? 'Código copiado ✓ Agora cole no banco' : '1. Copiar código Pix'}</button>
+      <ol className="pay-steps">
+        <li><b>2.</b> Abra o app do seu banco e toque em <strong>Pix → Pix Copia e Cola</strong></li>
+        <li><b>3.</b> Cole o código e confirme <strong>{brl(o.amount_cents)}</strong></li>
+      </ol>
+      {mins !== null && (
+        <p className="pay-timer">Código válido por <strong>{String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</strong></p>
+      )}
+      <ul className="diag-trust">
+        <li><CheckIcon size={15} /> Pagamento único</li>
+        <li><CheckIcon size={15} /> Garantia de 7 dias</li>
+        <li><CheckIcon size={15} /> Liberado na hora</li>
+      </ul>
+
+      <div className="status info pay-wait" role="status">
+        <span className="spinner dark" aria-hidden="true" /> Aguardando a confirmação do banco…
       </div>
-      <div className="order-code">
-        <span className="small">Seu código do pedido</span>
-        <strong>{o.public_ref}</strong>
-        <span className="small">Anote ou tire um print: com ele e seu WhatsApp você abre o mapa depois.</span>
-      </div>
-      <div className="card" style={{ textAlign: 'center' }}>
-        <div className="price">{brl(o.amount_cents)}</div>
-        <p className="small muted">Pagamento único · sem assinatura</p>
+
+      <details className="card pay-qr">
+        <summary><strong>Pagar pelo QR Code</strong> (de outro celular ou computador)</summary>
         {o.pix?.qr_base64 ? (
           <img className="qr" src={`data:image/png;base64,${o.pix.qr_base64}`} alt="QR Code do Pix" />
         ) : (
-          <div className="qr" style={{ display: 'grid', placeItems: 'center' }}><span className="small muted">Use o código abaixo</span></div>
+          <p>Use o código Pix copia e cola abaixo.</p>
         )}
-        {mins !== null && (
-          <p className="small"><strong>Válido por {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</strong></p>
-        )}
-        <button className="btn" onClick={copy}>{copied ? 'Código copiado ✓' : 'Copiar código Pix'}</button>
         <textarea id="pix-code" className="code" readOnly value={o.pix?.qr_code ?? ''} aria-label="Código Pix copia e cola" style={{ marginTop: 10 }} />
-      </div>
-      <div className="card soft">
-        <h3>Como pagar</h3>
-        <ol className="steps">
-          <li>Toque em “Copiar código Pix”.</li>
-          <li>Abra o app do seu banco e escolha Pix → “Pix Copia e Cola”.</li>
-          <li>Cole o código, confira o valor de {brl(o.amount_cents)} e confirme.</li>
-          <li>Volte para esta página: a liberação acontece assim que o banco confirmar.</li>
-        </ol>
-        <p className="small muted">
-          {cfg?.whatsapp_auto
-            ? 'Pode fechar esta aba: com o pagamento confirmado, você recebe o link de acesso no WhatsApp.'
-            : 'Se fechar esta aba, abra o mapa depois em “Recuperar acesso” com seu WhatsApp e o código do pedido.'}
-        </p>
+      </details>
+
+      <div className="order-code">
+        <span className="small">Seu código do pedido</span>
+        <strong>{o.public_ref}</strong>
+        <span className="small">{cfg?.whatsapp_auto
+          ? 'Pode fechar esta aba: com o pagamento confirmado, você recebe o acesso no WhatsApp.'
+          : 'Se fechar esta aba, abra depois em "Recuperar acesso" com seu WhatsApp e este código.'}</span>
       </div>
       {error && <div className="status warn" role="alert">{error}</div>}
       {!polling && (

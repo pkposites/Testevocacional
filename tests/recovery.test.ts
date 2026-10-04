@@ -46,4 +46,25 @@ describe('recuperar lead pelo WhatsApp do admin', () => {
     const after = (await adm.req('GET', '/api/admin/leads')).body.leads.find((l: any) => l.id === semOptIn.id);
     expect(after.contacted_at).not.toBeNull();
   });
+
+  it('lista "Pix não pago" e mensagem para gerar um Pix novo', async () => {
+    const app = await makeApp({ OFFER_MODE: 'free', DIAGNOSTIC_MODE: 'paid', DIAGNOSTIC_PRICE_CENTS: '1790' });
+    const c = new Client(app);
+    const resultId = await lead(c, '11955556666', false);
+    await lead(new Client(app), '11977778888', false);
+    const adm = new Client(app);
+    await adm.req('POST', '/api/admin/login', { password: 'adm' });
+    expect((await adm.req('GET', '/api/admin/leads?pix=1')).body.leads).toHaveLength(0);
+
+    await c.req('POST', '/api/diagnostic/orders', { result_id: resultId });
+    const pix = (await adm.req('GET', '/api/admin/leads?pix=1')).body.leads;
+    expect(pix).toHaveLength(1);
+    expect(pix[0].buyer_phone).toBe('5511955556666');
+    expect(pix[0].pix_unpaid_at).toBeTruthy();
+
+    const r = await adm.req('POST', `/api/admin/leads/${pix[0].id}/recovery`, { kind: 'pix' });
+    expect(r.body.text).toContain('gerou o Pix');
+    expect(r.body.text).toContain('R$ 17,90');
+    expect(r.body.text).toContain('/acesso?t=');
+  });
 });

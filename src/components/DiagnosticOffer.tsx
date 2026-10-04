@@ -207,6 +207,28 @@ export function DiagnosticOffer(props: {
         <button className="btn" onClick={() => nav(`/diagnostico/${resultId}`)}>Abrir e baixar meu roteiro</button>
       ) : paid ? (
         <div className="diag-buy">
+          <div className="pdf-preview" aria-label="Prévia do roteiro em PDF">
+            <div className="pdf-page pdf-cover">
+              <span className="pdf-brand">Mapa da Carreira</span>
+              <strong>Roteiro para começar em {first.name}</strong>
+              <span className="pdf-for">Preparado para {props.firstName}</span>
+              <ol>
+                <li>Plano de 4 semanas</li>
+                <li>Como estudar de graça</li>
+                <li>Qual curso fazer</li>
+                <li>Seu primeiro projeto</li>
+                <li>Primeiras vagas</li>
+              </ol>
+            </div>
+            <div className="pdf-page pdf-inner" aria-hidden="true">
+              <b>Semana 1</b>
+              <span /><span /><span /><span />
+              <b>Semana 2</b>
+              <span /><span /><span />
+              <i><LockIcon size={14} /></i>
+            </div>
+            <span className="pdf-badge">PDF</span>
+          </div>
           <p className="diag-anchor">Evite gastar com o curso errado.</p>
           <div className="diag-price">
             <strong>{price}</strong>
