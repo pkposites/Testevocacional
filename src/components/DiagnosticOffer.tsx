@@ -6,6 +6,11 @@ import { track } from '../analytics';
 import { CheckIcon, LockIcon, SparkIcon } from './Icons';
 
 type Card = { careerId: string; name: string; attention: string; tension?: string | null; dim?: string; match?: number };
+const PAIN: Record<string, string> = {
+  change: 'Quer mudar de área, mas não sabe por onde começar nem em qual curso confiar?',
+  first: 'Escolhendo a primeira área e com medo de perder tempo e dinheiro no caminho errado?',
+  explore: 'Já sabe o caminho que combina com você, mas não sabe qual é o primeiro passo?',
+};
 type Ctx = { moment?: string; dailyTime?: number; currentArea?: string };
 
 const WANTS = [
@@ -141,12 +146,13 @@ export function DiagnosticOffer(props: {
   return (
     <section id="diagnostico" className={`card diag${paid && !purchased ? ' diag-paid' : ''}`} aria-labelledby="diag-title">
       <div className="diag-head">
-        <span className="diag-badge"><SparkIcon size={14} /> {purchased ? 'Liberado para você' : 'Roteiro para começar'}</span>
+        <span className="diag-badge"><SparkIcon size={14} /> {purchased ? 'Liberado para você' : 'Seu próximo passo'}</span>
+        {!purchased && <p className="diag-pain">{PAIN[context.moment ?? ''] ?? PAIN.explore}</p>}
         <h2 id="diag-title" className="diag-title">
           {purchased ? <>Seu passo a passo para entrar em {first.name}</> : <>O passo a passo completo para entrar em <span>{first.name}</span></>}
         </h2>
         <p className="diag-promise">
-          {firstName}, um plano prático de 4 semanas, montado com as suas respostas: o que fazer, em que ordem, até buscar a primeira vaga.
+          {firstName}, este roteiro resolve isso: um plano prático de 4 semanas, montado com as suas respostas, dizendo o que fazer, em que ordem, até buscar a primeira vaga.
         </p>
       </div>
 
@@ -199,8 +205,8 @@ export function DiagnosticOffer(props: {
 
       {!purchased && (
         <div className="diag-vs">
-          <div><span>Seu mapa grátis</span><strong>mostra qual caminho</strong></div>
-          <div className="hl"><span>O roteiro</span><strong>mostra como entrar nele</strong></div>
+          <div><span>Sem um plano</span><strong>pesquisa sem fim, curso errado e a mudança fica para depois</strong></div>
+          <div className="hl"><span>Com o roteiro</span><strong>você sabe o que fazer hoje, nesta semana e no mês</strong></div>
         </div>
       )}
 

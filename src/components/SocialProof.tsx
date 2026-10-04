@@ -10,14 +10,6 @@ const SHOW_MS = 5500;
 const GAP_MS = 9000;
 const MAX_PER_VISIT = 4;
 
-function ago(min: number) {
-  if (min < 1) return 'agora';
-  if (min < 60) return `há ${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `há ${h} h`;
-  return `há ${Math.round(h / 24)} d`;
-}
-
 export function SocialProof() {
   const [items, setItems] = useState<Item[]>([]);
   const [current, setCurrent] = useState<Item | null>(null);
@@ -57,8 +49,7 @@ export function SocialProof() {
     <div className={`proof${visible ? ' show' : ''}`} role="status" aria-live="polite">
       <div className="proof-dot" aria-hidden="true" />
       <div className="proof-text">
-        <strong>{current.name ?? 'Uma pessoa'}</strong> descobriu <strong>{current.career}</strong> como 1º caminho
-        <span className="proof-time"> · {ago(current.minutes_ago)}</span>
+        <strong>{current.name ?? 'Uma pessoa'}</strong> fez a análise e descobriu <strong>{current.career}</strong> como 1º caminho
       </div>
       <button type="button" className="proof-close" aria-label="Fechar notificações" onClick={() => { setClosed(true); storage.set('mc_proof_off', '1'); }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>

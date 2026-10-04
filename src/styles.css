@@ -397,10 +397,9 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .pv-next strong { color: var(--title); font-size: 1.02rem; }
 .pv-next span:last-child { font-size: 0.92rem; }
 .diag-promise { font-size: 1.02rem; } .dg-today { border: 2px solid var(--accent); }
-/* No celular a notificação fica embaixo, sem cobrir o cabeçalho */
+/* Notificação no topo também no celular (a barra de compra fica embaixo). */
 @media (max-width: 640px) {
-  .proof { top: auto; bottom: max(12px, env(safe-area-inset-bottom)); transform: translate(-50%, 140%); }
-  .proof.show { transform: translate(-50%, 0); }
+  .proof { top: max(8px, env(safe-area-inset-top)); z-index: 45; }
 }
 .admin-push { margin-bottom: 14px; }
 .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -474,3 +473,8 @@ table.admin td, table.admin th { border-bottom: 1px solid var(--line); padding: 
 .buybar strong { color: #ffb48a; }
 .buybar .btn { width: auto; margin: 0; padding: 10px 16px; white-space: nowrap; }
 body.has-buybar { padding-bottom: 76px; }
+.diag-pain { margin: 12px 0 0; font-size: 1.05rem; font-weight: 700; color: var(--accent-dark); line-height: 1.35; }
+.diag-vs strong { font-size: 0.95rem; }
+.diag-remind { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; background: var(--title); color: #fff; text-decoration: none; font-size: 0.95rem; }
+.diag-remind strong { color: #ffb48a; }
+.diag-remind b { white-space: nowrap; color: #fff; }

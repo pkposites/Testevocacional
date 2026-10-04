@@ -63,8 +63,8 @@ export function App() {
   const isAdmin = loc.pathname.startsWith('/admin');
   const [free, setFree] = useState(true);
   useEffect(() => void getConfig().then((c) => setFree(c.offer_mode === 'free')).catch(() => undefined), []);
-  // Prova social só na página inicial: no teste e na prévia ela distrai e cobre o topo no celular.
-  const showProof = loc.pathname === '/';
+  // Prova social (dados reais) na página inicial, na prévia e no mapa; fora do teste para não distrair as respostas.
+  const showProof = loc.pathname === '/' || loc.pathname === '/previa' || loc.pathname.startsWith('/mapa/');
   return (
     <>
       <header className="topbar no-print">

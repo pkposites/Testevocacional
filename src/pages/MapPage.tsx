@@ -147,9 +147,18 @@ export function MapPage() {
       <h1 style={{ marginTop: 10 }}>{data.buyer_first_name}, este é o seu Mapa da Carreira</h1>
       {!map.broadProfile && map.cards[0] && (
         <p className="map-intro">
-          A profissão que mais se encaixa no seu perfil é <strong>{map.cards[0].name}</strong>. Logo abaixo, veja por que ela combina com você
-          {data.diagnostic?.purchased ? ' e abra o seu Roteiro para começar.' : ' e como começar a entrar nela com o Roteiro para começar.'}
+          A profissão que mais se encaixa no seu perfil é <strong>{map.cards[0].name}</strong>.
+          {data.diagnostic?.purchased ? ' Abra o seu Roteiro para começar logo abaixo.' : ' Logo abaixo, o passo a passo para começar nela; mais embaixo, por que ela combina com você.'}
         </p>
+      )}
+      {!map.broadProfile && map.cards[0] && (
+        <DiagnosticOffer
+          resultId={data.result_id} cards={map.cards} selectedId={selected}
+          onSelect={(id) => { setSelected(id); void api('PUT', '/api/selection', { result_id: resultId, career_id: id }).catch(() => undefined); }}
+          context={map.context}
+          firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail} diagnostic={data.diagnostic}
+          onInterested={() => setInterest(true)}
+        />
       )}
       <div className="card soft">
         {moment && <p><strong>Seu momento:</strong> {moment}</p>}
@@ -219,14 +228,11 @@ export function MapPage() {
             {selected === c.careerId ? 'Caminho escolhido ✓' : 'Quero experimentar este caminho'}
           </button>
         </article>
-        {idx === 0 && !map.broadProfile && (
-          <DiagnosticOffer
-            resultId={data.result_id} cards={map.cards} selectedId={selected}
-            onSelect={(id) => { setSelected(id); void api('PUT', '/api/selection', { result_id: resultId, career_id: id }).catch(() => undefined); }}
-            context={map.context}
-            firstName={data.buyer_first_name} interested={interest} detail={data.interest_detail} diagnostic={data.diagnostic}
-            onInterested={() => setInterest(true)}
-          />
+        {idx === 0 && !map.broadProfile && !data.diagnostic?.purchased && (
+          <a className="diag-remind no-print" href="#diagnostico">
+            <span>Pronto para começar em <strong>{c.name}</strong>?</span>
+            <b>Ver o passo a passo ↑</b>
+          </a>
         )}
         {idx === 0 && map.profile && (
           <section className="card" aria-labelledby="perfil-title">
