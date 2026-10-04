@@ -6,6 +6,7 @@ import { ApiError, clientIp, cookie, errorResponse, hmacHex, json, newToken, nor
 import { fakeStore } from './payments/fake';
 import { ProviderNetworkError, type ProviderPaymentState } from './payments/types';
 import { buildAnalytics, parseRange } from './analytics';
+import { adSpendForRange, saveAdSpend } from './adspend';
 import { applyProviderState } from './reconcile';
 import { computeResult, type ResultSnapshot } from './scoring';
 import { buildDiagnostic } from './diagnostic';
@@ -985,10 +986,23 @@ function requireAdmin(app: App, ctx: Ctx) {
  * Resumo do funil para a rotina de acompanhamento (a cada 3 h). Aceita o login do admin ou a chave REPORT_TOKEN
  * no cabeçalho x-report-token. Só números agregados: nenhum nome ou telefone.
  */
-route('GET', '/api/admin/report', async (app, ctx) => {
+function requireReportOrAdmin(app: App, ctx: Ctx) {
   const tok = ctx.req.headers.get('x-report-token') ?? '';
   const viaToken = !!app.cfg.reportToken && tok.length > 0 && safeEqual(sha256(tok), sha256(app.cfg.reportToken));
   if (!viaToken) requireAdmin(app, ctx);
+}
+
+/** Gasto do dia na Meta, enviado pela rotina a cada 3 h: {day:'AAAA-MM-DD', campaigns:[{id, name, spend}]} (spend em reais). */
+route('PUT', '/api/admin/ad-spend', async (app, ctx) => {
+  requireReportOrAdmin(app, ctx);
+  const body = await readJson(ctx);
+  const n = await saveAdSpend(app, body.day, body.campaigns);
+  if (n < 0) throw new ApiError(400, 'invalid_spend', 'Envie day (AAAA-MM-DD) e campaigns [{id, name, spend}].');
+  return json(ctx, 200, { ok: true, campaigns: n, ad_spend: await adSpendForRange(app.db, body.day, body.day) });
+});
+
+route('GET', '/api/admin/report', async (app, ctx) => {
+  requireReportOrAdmin(app, ctx);
   const hours = Math.min(Math.max(Number(ctx.url.searchParams.get('hours') ?? 3) || 3, 1), 24 * 30);
   const win = async (h: number) => {
     const since = `now() - interval '${h} hours'`;
@@ -1173,8 +1187,10 @@ route('GET', '/api/admin/analytics', async (app, ctx) => {
   requireAdmin(app, ctx);
   const range = parseRange(ctx.url.searchParams.get('from'), ctx.url.searchParams.get('to'));
   const t0 = Date.now();
+  // Em sequência: a tabela de gasto é criada na primeira consulta e não deve correr junto com as outras.
   const data = await buildAnalytics(app.db, range, app.cfg.offerMode);
-  const res = json(ctx, 200, data);
+  const adSpend = await adSpendForRange(app.db, range.from, range.to);
+  const res = json(ctx, 200, { ...data, ad_spend: adSpend });
   res.headers.set('server-timing', `db;dur=${Date.now() - t0}`);
   return res;
 });

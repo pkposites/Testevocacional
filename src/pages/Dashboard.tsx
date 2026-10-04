@@ -8,6 +8,7 @@ type Item = { key: string; label: string; value: number; text?: string };
 type Day = { day: string; visits: number; started: number; completed: number; checkouts: number; purchases: number; revenueCents: number; leads: number; interested: number };
 type Data = {
   mode: 'free' | 'paid';
+  ad_spend?: { cents: number; updated_at: string | null; campaigns: { id: string; name: string; cents: number }[] };
   leads: { total: number; interested: number; publicNameOk: number };
   range: { from: string; to: string };
   funnel: Item[];
@@ -271,13 +272,17 @@ function BarList({ rows, total, extra }: { rows: { label: string; value: number;
   );
 }
 
+const shortCampaign = (name: string) => (/vendas/i.test(name) ? 'Vendas' : /lead/i.test(name) ? 'Leads' : name.split('|')[0].trim() || 'Campanha');
+const fmtUpdated = (iso: string) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
 export function Dashboard() {
   const [preset, setPreset] = useState<string>(storage.get('mc_dash_preset') ?? '7d');
   // Já começa no período salvo: sem uma primeira consulta de "7 dias" correndo junto com a de "hoje".
   const initial = (PRESETS.find((x) => x.id === preset)?.range() ?? [localToday(-6), localToday()]) as [string, string];
   const [from, setFrom] = useState(initial[0]);
   const [to, setTo] = useState(initial[1]);
-  const [spendText, setSpendText] = useState(storage.get('mc_dash_spend') ?? '');
+  // Gasto vem da Meta (enviado a cada 3 h); o campo manual só vale se for preenchido.
+  const [spendText, setSpendText] = useState('');
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
@@ -303,8 +308,9 @@ export function Dashboard() {
     return () => { current = false; };
   }, [from, to]);
 
-  const spend = Number(spendText.replace(/\./g, '').replace(',', '.')) || 0;
-  useEffect(() => storage.set('mc_dash_spend', spendText), [spendText]);
+  const manualSpend = Number(spendText.replace(/\./g, '').replace(',', '.')) || 0;
+  const autoSpend = (data?.ad_spend?.cents ?? 0) / 100;
+  const spend = manualSpend > 0 ? manualSpend : autoSpend;
 
   const k = useMemo(() => {
     if (!data) return null;
@@ -353,7 +359,7 @@ export function Dashboard() {
         </div>
         <label className="viz-field">De<input type="date" value={from} max={to} onChange={(e) => { setPreset('custom'); setFrom(e.target.value); }} /></label>
         <label className="viz-field">Até<input type="date" value={to} min={from} onChange={(e) => { setPreset('custom'); setTo(e.target.value); }} /></label>
-        <label className="viz-field">Investimento no período (R$)<input type="text" inputMode="decimal" placeholder="ex.: 98,00" value={spendText} onChange={(e) => setSpendText(e.target.value)} /></label>
+        <label className="viz-field">Investimento no período (R$)<input type="text" inputMode="decimal" placeholder={autoSpend > 0 ? autoSpend.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' (Meta)' : 'ex.: 98,00'} value={spendText} onChange={(e) => setSpendText(e.target.value)} /></label>
       </div>
 
       {error && <div className="status error">{error}</div>}
@@ -361,6 +367,16 @@ export function Dashboard() {
         Mostrando: <strong>{from === to ? fmtDay(from) : `${fmtDay(from)} a ${fmtDay(to)}`}</strong>
         {from === to && from === localToday() ? ' (hoje, desde 00:00 de Brasília)' : ''}
       </p>
+      {data && (
+        <div className="viz-spend small">
+          {manualSpend > 0 ? <>Usando o investimento digitado: <strong>{brl(Math.round(manualSpend * 100))}</strong></>
+            : data.ad_spend && data.ad_spend.cents > 0 ? (
+              <>Gasto na Meta no período: <strong>{brl(data.ad_spend.cents)}</strong>
+                {data.ad_spend.campaigns.length > 1 && <> ({data.ad_spend.campaigns.map((c) => `${shortCampaign(c.name)} ${brl(c.cents)}`).join(' · ')})</>}
+                {data.ad_spend.updated_at && <span className="muted"> · atualizado {fmtUpdated(data.ad_spend.updated_at)}</span>}</>
+            ) : <span className="muted">Gasto na Meta ainda não enviado para este período.</span>}
+        </div>
+      )}
       {!data || !k ? <div className="spinner dark" aria-label="Carregando" /> : (
         <>
           <div className="viz-tiles">
