@@ -103,6 +103,24 @@ describe('diagnóstico pago', () => {
     expect((await adm.req('GET', '/api/admin/leads')).body.leads).toHaveLength(1);
   });
 
+  it('painel conta Pix gerados e Pix pagos separadamente', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const adm = new Client(app);
+    await adm.req('POST', '/api/admin/login', { password: 'adm' });
+    await adm.req('POST', '/api/admin/device', { internal: false });
+    const counts = async () => {
+      const d = (await adm.req('GET', `/api/admin/analytics?from=${today}&to=${today}`)).body;
+      const f = Object.fromEntries(d.funnel.map((x: any) => [x.key, x.value]));
+      return [f.pix, f.paid, d.revenue.grossCents];
+    };
+    const a = new Client(app);
+    const { resultId } = await lead(a);
+    const o = await a.req('POST', '/api/diagnostic/orders', { result_id: resultId });
+    expect(await counts()).toEqual([1, 0, 0]);
+    await pay(o.body.order_id);
+    expect(await counts()).toEqual([1, 1, 2990]);
+  });
+
   it('sem acesso ao mapa não cria pedido; modo lista de espera recusa a compra', async () => {
     const c = new Client(app);
     const { resultId } = await lead(c);

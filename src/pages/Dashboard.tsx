@@ -389,6 +389,10 @@ export function Dashboard() {
                 <Tile label="Clicaram na oferta" value={fmtInt(data.leads.interested)} sub={`${fmtPct(pct(data.leads.interested, data.leads.total), 0)} dos leads`} />
                 <Tile label="Custo por lead" value={spend > 0 && data.leads.total ? brl(Math.round((spend / data.leads.total) * 100)) : '—'} sub={spend > 0 ? undefined : 'informe o investimento'} />
                 <Tile label="Custo por interessado" value={spend > 0 && data.leads.interested ? brl(Math.round((spend / data.leads.interested) * 100)) : '—'} sub="sinal de demanda" />
+                <Tile label="Pix gerados" value={fmtInt(k.f.pix)} sub={`${fmtPct(pct(k.f.pix, data.leads.total), 0)} dos leads${k.f.pix > k.f.paid ? ` · ${fmtInt(k.f.pix - k.f.paid)} sem pagar` : ''}`} />
+                <Tile label="Pix pagos" value={fmtInt(k.f.paid)} sub={k.f.pix ? `${fmtPct(pct(k.f.paid, k.f.pix), 0)} dos Pix · ${brl(data.revenue.grossCents)}` : brl(data.revenue.grossCents)} status={k.f.paid > 0 ? 'good' : null} />
+                <Tile label="ROAS" value={k.roas != null ? k.roas.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'} sub={spend > 0 ? `meta ${ROAS_GOAL}` : 'informe o investimento'} status={k.roas != null ? (k.roas >= ROAS_GOAL ? 'good' : 'bad') : null} />
+                <Tile label="Custo por compra" value={k.cpa != null ? brl(Math.round(k.cpa * 100)) : '—'} sub={`meta até ${brl(Math.floor(CPA_GOAL * 100))}`} status={k.cpa != null ? (k.cpa <= CPA_GOAL ? 'good' : 'bad') : null} />
               </>
             ) : (
               <>
